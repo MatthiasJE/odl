@@ -1,7 +1,6 @@
 """Source code for the getting started example."""
 
 import odl
-import scipy
 import scipy.signal
 
 
@@ -20,8 +19,8 @@ class Convolution(odl.Operator):
         # Initialize the Operator class by calling its __init__ method.
         # This sets properties such as domain and range and allows the other
         # operator convenience functions to work.
-        odl.Operator.__init__(self, domain=kernel.space, range=kernel.space,
-                              linear=True)
+        super(Convolution, self).__init__(
+            domain=kernel.space, range=kernel.space, linear=True)
 
     def _call(self, x):
         """Implement calling the operator by calling scipy."""
@@ -59,7 +58,7 @@ g.show('convolved phantom')
 opnorm = odl.power_method_opnorm(A)
 
 f = space.zero()
-odl.solvers.landweber(A, f, g, niter=100, omega=1/opnorm**2)
+odl.solvers.landweber(A, f, g, niter=100, omega=1 / opnorm ** 2)
 f.show('landweber')
 
 # Conjugate gradient

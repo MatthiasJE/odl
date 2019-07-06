@@ -10,52 +10,105 @@ from __future__ import division
 import pytest
 
 import odl
-from odl.util.testutils import all_almost_equal
+from odl.util.testutils import all_almost_equal, simple_fixture
 
 
-def test_pspace_op_init():
-    r3 = odl.rn(3)
-    I = odl.IdentityOperator(r3)
+base_op = simple_fixture(
+    'base_op',
+    [odl.IdentityOperator(odl.rn(3)),
+     odl.BroadcastOperator(odl.IdentityOperator(odl.rn(3)), 2),
+     odl.ReductionOperator(odl.IdentityOperator(odl.rn(3)), 2),
+     odl.DiagonalOperator(odl.IdentityOperator(odl.rn(3)), 2),
+     ],
+    fmt=' {name}={value.__class__.__name__}')
 
-    op = odl.ProductSpaceOperator([I])
-    assert op.domain == odl.ProductSpace(r3)
-    assert op.range == odl.ProductSpace(r3)
 
-    op = odl.ProductSpaceOperator([I, I])
-    assert op.domain == odl.ProductSpace(r3, 2)
-    assert op.range == odl.ProductSpace(r3)
+def test_pspace_op_init(base_op):
+    """Test initialization with different base operators."""
+    A = base_op
 
-    op = odl.ProductSpaceOperator([[I],
-                                   [I]])
-    assert op.domain == odl.ProductSpace(r3)
-    assert op.range == odl.ProductSpace(r3, 2)
+    op = odl.ProductSpaceOperator([[A]])
+    assert op.domain == A.domain ** 1
+    assert op.range == A.range ** 1
 
-    op = odl.ProductSpaceOperator([[I, 0],
-                                   [0, I]])
-    assert op.domain == odl.ProductSpace(r3, 2)
-    assert op.range == odl.ProductSpace(r3, 2)
+    op = odl.ProductSpaceOperator([[A, A]])
+    assert op.domain == A.domain ** 2
+    assert op.range == A.range ** 1
 
-    op = odl.ProductSpaceOperator([[I, None],
-                                   [None, I]])
-    assert op.domain == odl.ProductSpace(r3, 2)
-    assert op.range == odl.ProductSpace(r3, 2)
+    op = odl.ProductSpaceOperator([[A],
+                                   [A]])
+    assert op.domain == A.domain ** 1
+    assert op.range == A.range ** 2
+
+    op = odl.ProductSpaceOperator([[A, 0],
+                                   [0, A]])
+    assert op.domain == A.domain ** 2
+    assert op.range == A.range ** 2
+
+    op = odl.ProductSpaceOperator([[A, None],
+                                   [None, A]])
+    assert op.domain == A.domain ** 2
+    assert op.range == A.range ** 2
+
+
+def test_pspace_op_derivative(base_op):
+    """Test derivatives with different base operators."""
+    A = base_op
+
+    op = odl.ProductSpaceOperator([[A + 1]])
+    true_deriv = odl.ProductSpaceOperator([[A]])
+    deriv = op.derivative(op.domain.zero())
+    assert deriv.domain == op.domain
+    assert deriv.range == op.range
+    x = op.domain.one()
+    assert all_almost_equal(deriv(x), true_deriv(x))
+
+    op = odl.ProductSpaceOperator([[A + 1, 2 * A - 1]])
+    deriv = op.derivative(op.domain.zero())
+    true_deriv = odl.ProductSpaceOperator([[A, 2 * A]])
+    assert deriv.domain == op.domain
+    assert deriv.range == op.range
+    x = op.domain.one()
+    assert all_almost_equal(deriv(x), true_deriv(x))
+
+
+def test_pspace_op_adjoint(base_op):
+    """Test adjoints with different base operators."""
+    A = base_op
+
+    op = odl.ProductSpaceOperator([[A]])
+    true_adj = odl.ProductSpaceOperator([[A.adjoint]])
+    adj = op.adjoint
+    assert adj.domain == op.range
+    assert adj.range == op.domain
+    y = op.range.one()
+    assert all_almost_equal(adj(y), true_adj(y))
+
+    op = odl.ProductSpaceOperator([[2 * A, -A]])
+    true_adj = odl.ProductSpaceOperator([[2 * A.adjoint],
+                                         [-A.adjoint]])
+    adj = op.adjoint
+    assert adj.domain == op.range
+    assert adj.range == op.domain
+    y = op.range.one()
+    assert all_almost_equal(adj(y), true_adj(y))
 
 
 def test_pspace_op_weighted_init():
 
     r3 = odl.rn(3)
     ran = odl.ProductSpace(r3, 2, weighting=[1, 2])
-    I = odl.IdentityOperator(r3)
+    A = odl.IdentityOperator(r3)
 
     with pytest.raises(NotImplementedError):
-        odl.ProductSpaceOperator([[I],
+        odl.ProductSpaceOperator([[A],
                                   [0]], range=ran)
 
 
 def test_pspace_op_sum_call():
     r3 = odl.rn(3)
-    I = odl.IdentityOperator(r3)
-    op = odl.ProductSpaceOperator([I, I])
+    A = odl.IdentityOperator(r3)
+    op = odl.ProductSpaceOperator([[A, A]])
 
     x = r3.element([1, 2, 3])
     y = r3.element([7, 8, 9])
@@ -67,9 +120,9 @@ def test_pspace_op_sum_call():
 
 def test_pspace_op_project_call():
     r3 = odl.rn(3)
-    I = odl.IdentityOperator(r3)
-    op = odl.ProductSpaceOperator([[I],
-                                   [I]])
+    A = odl.IdentityOperator(r3)
+    op = odl.ProductSpaceOperator([[A],
+                                   [A]])
 
     x = r3.element([1, 2, 3])
     z = op.domain.element([x])
@@ -82,9 +135,9 @@ def test_pspace_op_project_call():
 
 def test_pspace_op_diagonal_call():
     r3 = odl.rn(3)
-    I = odl.IdentityOperator(r3)
-    op = odl.ProductSpaceOperator([[I, 0],
-                                   [0, I]])
+    A = odl.IdentityOperator(r3)
+    op = odl.ProductSpaceOperator([[A, 0],
+                                   [0, A]])
 
     x = r3.element([1, 2, 3])
     y = r3.element([7, 8, 9])
@@ -96,9 +149,9 @@ def test_pspace_op_diagonal_call():
 
 def test_pspace_op_swap_call():
     r3 = odl.rn(3)
-    I = odl.IdentityOperator(r3)
-    op = odl.ProductSpaceOperator([[0, I],
-                                   [I, 0]])
+    A = odl.IdentityOperator(r3)
+    op = odl.ProductSpaceOperator([[0, A],
+                                   [A, 0]])
 
     x = r3.element([1, 2, 3])
     y = r3.element([7, 8, 9])
@@ -188,4 +241,4 @@ def test_comp_proj_adjoint_slice():
 
 
 if __name__ == '__main__':
-    pytest.main([str(__file__.replace('\\', '/')), '-v'])
+    odl.util.test_file(__file__)

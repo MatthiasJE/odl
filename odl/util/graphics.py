@@ -8,18 +8,27 @@
 
 """Functions for graphical output."""
 
-# Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
-from future import standard_library
-standard_library.install_aliases()
-
 import numpy as np
+import warnings
 
 from odl.util.testutils import run_doctests
 from odl.util.utility import is_real_dtype
 
 
 __all__ = ('show_discrete_data',)
+
+
+def warning_free_pause():
+    """Issue a matplotlib pause without the warning."""
+    import matplotlib.pyplot as plt
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",
+                                message="Using default event loop until "
+                                        "function specific to this GUI is "
+                                        "implemented")
+        plt.pause(0.0001)
 
 
 def _safe_minmax(values):
@@ -41,8 +50,13 @@ def _colorbar_ticks(minval, maxval):
     """Return the ticks (values show) in the colorbar."""
     if not (np.isfinite(minval) and np.isfinite(maxval)):
         return [0, 0, 0]
+    elif minval == maxval:
+        return [minval]
     else:
-        return [minval, (maxval + minval) / 2., maxval]
+        # Add eps to ensure values stay inside the range of the colorbar.
+        # Otherwise they may occationally not display.
+        eps = (maxval - minval) / 1e5
+        return [minval + eps, (maxval + minval) / 2., maxval - eps]
 
 
 def _digits(minval, maxval):
@@ -146,6 +160,11 @@ def show_discrete_data(values, grid, title=None, method='',
     axis_fontsize : int, optional
         Fontsize for the axes. Default: 16
 
+    colorbar : bool, optional
+        Argument relevant for 2d plots using ``method='imshow'``. If ``True``,
+        include a colorbar in the plot.
+        Default: True
+
     kwargs : {'figsize', 'saveto', ...}, optional
         Extra keyword arguments passed on to display method
         See the Matplotlib functions for documentation of extra
@@ -181,6 +200,11 @@ def show_discrete_data(values, grid, title=None, method='',
     saveto = kwargs.pop('saveto', None)
     interp = kwargs.pop('interp', 'nearest')
     axis_fontsize = kwargs.pop('axis_fontsize', 16)
+    colorbar = kwargs.pop('colorbar', True)
+
+    # Normalize input
+    interp, interp_in = str(interp).lower(), interp
+    method, method_in = str(method).lower(), method
 
     # Check if we should and can update the plot in-place
     update_in_place = kwargs.pop('update_in_place', False)
@@ -197,14 +221,15 @@ def show_discrete_data(values, grid, title=None, method='',
             elif interp == 'linear':
                 method = 'plot'
             else:
-                method = 'plot'
+                raise ValueError('`interp` {!r} not supported'
+                                 ''.format(interp_in))
 
         if method == 'plot' or method == 'step' or method == 'scatter':
             args_re += [grid.coord_vectors[0], values.real]
             args_im += [grid.coord_vectors[0], values.imag]
         else:
             raise ValueError('`method` {!r} not supported'
-                             ''.format(method))
+                             ''.format(method_in))
 
     elif values.ndim == 2:
         if not method:
@@ -222,7 +247,8 @@ def show_discrete_data(values, grid, title=None, method='',
             elif interp == 'linear':
                 interpolation = 'bilinear'
             else:
-                interpolation = 'none'
+                raise ValueError('`interp` {!r} not supported'
+                                 ''.format(interp_in))
 
             dsp_kwargs.update({'interpolation': interpolation,
                                'cmap': 'bone',
@@ -243,7 +269,7 @@ def show_discrete_data(values, grid, title=None, method='',
             sub_kwargs.update({'projection': '3d'})
         else:
             raise ValueError('`method` {!r} not supported'
-                             ''.format(method))
+                             ''.format(method_in))
 
     else:
         raise NotImplementedError('no method for {}d display implemented'
@@ -309,10 +335,10 @@ def show_discrete_data(values, grid, title=None, method='',
                 minval_re, maxval_re = kwargs['clim']
 
             ticks_re = _colorbar_ticks(minval_re, maxval_re)
-            format_re = _colorbar_format(minval_re, maxval_re)
+            fmt_re = _colorbar_format(minval_re, maxval_re)
 
             plt.colorbar(csub_re, orientation='horizontal',
-                         ticks=ticks_re, format=format_re)
+                         ticks=ticks_re, format=fmt_re)
 
         # Imaginary
         if len(fig.axes) < 3:
@@ -345,10 +371,10 @@ def show_discrete_data(values, grid, title=None, method='',
                 minval_im, maxval_im = kwargs['clim']
 
             ticks_im = _colorbar_ticks(minval_im, maxval_im)
-            format_im = _colorbar_format(minval_im, maxval_im)
+            fmt_im = _colorbar_format(minval_im, maxval_im)
 
             plt.colorbar(csub_im, orientation='horizontal',
-                         ticks=ticks_im, format=format_im)
+                         ticks=ticks_im, format=fmt_im)
 
     else:
         if len(fig.axes) == 0:
@@ -395,7 +421,7 @@ def show_discrete_data(values, grid, title=None, method='',
             plt.xticks(xpts, xlabels)
             plt.yticks(ypts, ylabels)
 
-        if method == 'imshow':
+        if method == 'imshow' and colorbar:
             # Add colorbar
             # Use clim from kwargs if given
             if 'clim' not in kwargs:
@@ -404,26 +430,31 @@ def show_discrete_data(values, grid, title=None, method='',
                 minval, maxval = kwargs['clim']
 
             ticks = _colorbar_ticks(minval, maxval)
-            format = _colorbar_format(minval, maxval)
+            fmt = _colorbar_format(minval, maxval)
             if len(fig.axes) < 2:
                 # Create colorbar if none seems to exist
-                plt.colorbar(mappable=csub, ticks=ticks, format=format)
+                plt.colorbar(mappable=csub, ticks=ticks, format=fmt)
             elif update_in_place:
                 # If it exists and we should update it
                 csub.colorbar.set_clim(minval, maxval)
                 csub.colorbar.set_ticks(ticks)
-                csub.colorbar.set_ticklabels([format % tick for tick in ticks])
+                if '%' not in fmt:
+                    labels = [fmt] * len(ticks)
+                else:
+                    labels = [fmt % t for t in ticks]
+                csub.colorbar.set_ticklabels(labels)
                 csub.colorbar.draw_all()
 
-    # Fixes overlapping stuff at the expense of potentially squashed subplots
-    if not update_in_place:
-        fig.tight_layout()
-
+    # Set title of window
     if title is not None:
         if not values_are_complex:
             # Do not overwrite title for complex values
             plt.title(title)
         fig.canvas.manager.set_window_title(title)
+
+    # Fixes overlapping stuff at the expense of potentially squashed subplots
+    if not update_in_place:
+        fig.tight_layout()
 
     if updatefig or plt.isinteractive():
         # If we are running in interactive mode, we can always show the fig
@@ -432,7 +463,7 @@ def show_discrete_data(values, grid, title=None, method='',
         plt.show(block=False)
         if not update_in_place:
             plt.draw()
-            plt.pause(0.0001)
+            warning_free_pause()
         else:
             try:
                 sub.draw_artist(csub)
@@ -441,7 +472,7 @@ def show_discrete_data(values, grid, title=None, method='',
                 fig.canvas.flush_events()
             except AttributeError:
                 plt.draw()
-                plt.pause(0.0001)
+                warning_free_pause()
 
     if force_show:
         plt.show()

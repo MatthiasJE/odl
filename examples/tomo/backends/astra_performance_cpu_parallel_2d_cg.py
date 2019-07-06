@@ -5,15 +5,16 @@ Least Squares method on the CPU.
 
 In general, ASTRA is faster than ODL since it does not need to perform any
 copies and all arithmetic is performed in place. Despite this, ODL is not much
-slower. In this example, the overhead is about x1.2, depending on the
+slower. In this example, the overhead is about 40 %, depending on the
 hardware used.
 """
 
 import astra
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy
+import scipy.misc
 import odl
+from odl.util.testutils import timer
 
 
 # Common geometry parameters
@@ -22,7 +23,7 @@ domain_size = np.array([512, 512])
 n_angles = 180
 det_size = 362
 niter = 20
-data = np.rot90(scipy.misc.ascent().astype('float'), -1)
+phantom = np.rot90(scipy.misc.ascent().astype('float'), -1)
 
 
 # --- ASTRA ---
@@ -39,7 +40,7 @@ proj_geom = astra.create_proj_geom('parallel',
 proj_id = astra.create_projector('line', proj_geom, vol_geom)
 
 # Create sinogram
-sinogram_id, sinogram = astra.create_sino(data, proj_id)
+sinogram_id, sinogram = astra.create_sino(phantom, proj_id)
 
 # Create a data object for the reconstruction
 rec_id = astra.data2d.create('-vol', vol_geom)
@@ -53,7 +54,7 @@ cfg['ProjectorId'] = proj_id
 # Create the algorithm object from the configuration structure
 alg_id = astra.algorithm.create(cfg)
 
-with odl.util.Timer('ASTRA run'):
+with timer('ASTRA Run'):
     # Run the algorithm
     astra.algorithm.run(alg_id, niter)
 
@@ -78,22 +79,22 @@ geometry = odl.tomo.parallel_beam_geometry(reco_space, n_angles, det_size)
 ray_trafo = odl.tomo.RayTransform(reco_space, geometry, impl='astra_cpu')
 
 # Create sinogram
-rhs = ray_trafo(data)
+data = ray_trafo(phantom)
 
 # Solve with CGLS (aka CGN)
 x = reco_space.zero()
-with odl.util.Timer('ODL run'):
-    odl.solvers.conjugate_gradient_normal(ray_trafo, x, rhs, niter=niter)
+with timer('ODL Run'):
+    odl.solvers.conjugate_gradient_normal(ray_trafo, x, data, niter=niter)
 
 # Display results for comparison
-plt.figure('data')
-plt.imshow(data.T, origin='lower', cmap='bone')
-plt.figure('ASTRA sinogram')
+plt.figure('Phantom')
+plt.imshow(phantom.T, origin='lower', cmap='bone')
+plt.figure('ASTRA Sinogram')
 plt.imshow(sinogram.T, origin='lower', cmap='bone')
-plt.figure('ASTRA reconstruction')
+plt.figure('ASTRA Reconstruction')
 plt.imshow(rec.T, origin='lower', cmap='bone')
-plt.figure('ODL sinogram')
-plt.imshow(rhs.asarray().T, origin='lower', cmap='bone')
-plt.figure('ODL reconstruction')
+plt.figure('ODL Sinogram')
+plt.imshow(data.asarray().T, origin='lower', cmap='bone')
+plt.figure('ODL Reconstruction')
 plt.imshow(x.asarray().T, origin='lower', cmap='bone')
 plt.show()

@@ -1,4 +1,4 @@
-﻿# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -8,25 +8,21 @@
 
 """Cartesian products of `LinearSpace` instances."""
 
-# Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
-from builtins import range, str, super, zip
-from future import standard_library
-standard_library.install_aliases()
-
-from numbers import Integral
 from itertools import product
+from numbers import Integral
 import numpy as np
 
-from odl.set import LinearSpace, LinearSpaceElement, RealNumbers
+from odl.set import LinearSpace
+from odl.set.space import LinearSpaceElement
 from odl.space.weighting import (
-    Weighting, ArrayWeighting, ConstWeighting, NoWeighting,
+    Weighting, ArrayWeighting, ConstWeighting,
     CustomInner, CustomNorm, CustomDist)
-from odl.util import is_real_dtype, signature_string, indent_rows
+from odl.util import is_real_dtype, signature_string, indent
 from odl.util.ufuncs import ProductSpaceUfuncs
 
 
-__all__ = ('ProductSpace', 'ProductSpaceElement')
+__all__ = ('ProductSpace',)
 
 
 class ProductSpace(LinearSpace):
@@ -41,7 +37,7 @@ class ProductSpace(LinearSpace):
     """
 
     def __init__(self, *spaces, **kwargs):
-        """Initialize a new instance.
+        r"""Initialize a new instance.
 
         Parameters
         ----------
@@ -96,8 +92,6 @@ class ProductSpace(LinearSpace):
             - ``dist(x, y) <= dist(x, z) + dist(z, y)``
 
             By default, ``dist(x, y)`` is calculated as ``norm(x - y)``.
-            This creates an intermediate array ``x - y``, which can be
-            avoided by choosing ``dist_using_inner=True``.
 
             Cannot be combined with: ``weighting, norm, inner``
 
@@ -129,21 +123,6 @@ class ProductSpace(LinearSpace):
 
             Cannot be combined with: ``weighting, dist, norm``
 
-        dist_using_inner : bool, optional
-            Calculate ``dist`` using the formula
-
-                ``||x - y||^2 = ||x||^2 + ||y||^2 - 2 * Re <x, y>``
-
-            This avoids the creation of new arrays and is thus faster
-            for large arrays. On the downside, it will not evaluate to
-            exactly zero for equal (but not identical) ``x`` and ``y``.
-
-            This option can only be used if ``exponent`` is 2.0.
-
-            Default: ``False``.
-
-            Cannot be combined with: ``dist``
-
         Examples
         --------
         Product of two rn spaces
@@ -163,37 +142,37 @@ class ProductSpace(LinearSpace):
         not the computations in the individual components. We give the
         exact definitions in the following:
 
-        Let :math:`\mathcal{X} = \mathcal{X}_1 \\times \dots \\times
+        Let :math:`\mathcal{X} = \mathcal{X}_1 \times \dots \times
         \mathcal{X}_d` be a product space, and
-        :math:`\langle \cdot, \cdot\\rangle_i`,
-        :math:`\lVert \cdot \\rVert_i`, :math:`d_i(\cdot, \cdot)` be
+        :math:`\langle \cdot, \cdot\rangle_i`,
+        :math:`\lVert \cdot \rVert_i`, :math:`d_i(\cdot, \cdot)` be
         inner products, norms and distances in the respective
         component spaces.
 
         **Inner product:**
 
         .. math::
-            \langle x, y \\rangle = \\sum_{i=1}^d \langle x_i, y_i \\rangle_i
+            \langle x, y \rangle = \sum_{i=1}^d \langle x_i, y_i \rangle_i
 
         **Norm:**
 
         - :math:`p < \infty`:
 
         .. math::
-            \lVert x\\rVert =
-            \left( \sum_{i=1}^d \lVert x_i \\rVert_i^p \\right)^{1/p}
+            \lVert x\rVert =
+            \left( \sum_{i=1}^d \lVert x_i \rVert_i^p \right)^{1/p}
 
         - :math:`p = \infty`:
 
         .. math::
-            \lVert x\\rVert = \max_i \lVert x_i \\rVert_i
+            \lVert x\rVert = \max_i \lVert x_i \rVert_i
 
         **Distance:**
 
         - :math:`p < \infty`:
 
         .. math::
-            d(x, y) = \left( \sum_{i=1}^d d_i(x_i, y_i)^p \\right)^{1/p}
+            d(x, y) = \left( \sum_{i=1}^d d_i(x_i, y_i)^p \right)^{1/p}
 
         - :math:`p = \infty`:
 
@@ -219,7 +198,6 @@ class ProductSpace(LinearSpace):
         inner = kwargs.pop('inner', None)
         weighting = kwargs.pop('weighting', None)
         exponent = float(kwargs.pop('exponent', 2.0))
-        dist_using_inner = bool(kwargs.pop('dist_using_inner', False))
         if kwargs:
             raise TypeError('got unexpected keyword arguments: {}'
                             ''.format(kwargs))
@@ -233,36 +211,36 @@ class ProductSpace(LinearSpace):
             raise ValueError('`exponent` cannot be used together with '
                              'inner, norm or dist')
 
-        # Make a power space if the second argument is an integer
-        if (len(spaces) == 2 and
-                isinstance(spaces[0], LinearSpace) and
-                isinstance(spaces[1], Integral)):
+        # Make a power space if the second argument is an integer.
+        # For the case that the integer is 0, we already set the field here.
+        if len(spaces) == 2 and isinstance(spaces[1], Integral):
+            field = spaces[0].field
             spaces = [spaces[0]] * spaces[1]
 
         # Validate the space arguments
-        wrong_spaces = [spc for spc in spaces
-                        if not isinstance(spc, LinearSpace)]
-        if wrong_spaces:
-            raise TypeError('{!r} not LinearSpace instance(s)'
-                            ''.format(wrong_spaces))
-
+        if not all(isinstance(spc, LinearSpace) for spc in spaces):
+            raise TypeError(
+                'all arguments must be `LinearSpace` instances, or the '
+                'first argument must be `LinearSpace` and the second '
+                'integer; got {!r}'.format(spaces))
         if not all(spc.field == spaces[0].field for spc in spaces):
             raise ValueError('all spaces must have the same field')
 
         # Assign spaces and field
         self.__spaces = tuple(spaces)
-        self.__size = len(spaces)
-        if field is None:
-            if self.size == 0:
-                raise ValueError('no spaces provided, cannot deduce field')
-            else:
-                field = self.spaces[0].field
 
         # Cache for efficiency
         self.__is_power_space = all(spc == self.spaces[0]
                                     for spc in self.spaces[1:])
 
-        super().__init__(field)
+        # Assing or infer field
+        if field is None:
+            if len(self) == 0:
+                raise ValueError('no spaces provided, cannot deduce field')
+            else:
+                field = self.spaces[0].field
+
+        super(ProductSpace, self).__init__(field)
 
         # Assign weighting
         if weighting is not None:
@@ -270,7 +248,7 @@ class ProductSpace(LinearSpace):
                 self.__weighting = weighting
             elif np.isscalar(weighting):
                 self.__weighting = ProductSpaceConstWeighting(
-                    weighting, exponent, dist_using_inner=dist_using_inner)
+                    weighting, exponent)
             elif weighting is None:
                 # Need to wait until dist, norm and inner are handled
                 pass
@@ -281,7 +259,7 @@ class ProductSpace(LinearSpace):
                                      ''.format(weighting))
                 if arr.ndim == 1:
                     self.__weighting = ProductSpaceArrayWeighting(
-                        arr, exponent, dist_using_inner=dist_using_inner)
+                        arr, exponent)
                 else:
                     raise ValueError('weighting array has {} dimensions, '
                                      'expected 1'.format(arr.ndim))
@@ -293,23 +271,75 @@ class ProductSpace(LinearSpace):
         elif inner is not None:
             self.__weighting = ProductSpaceCustomInner(inner)
         else:  # all None -> no weighing
-            self.__weighting = ProductSpaceNoWeighting(
-                exponent, dist_using_inner=dist_using_inner)
-
-    @property
-    def size(self):
-        """Number of factors."""
-        return self.__size
+            self.__weighting = ProductSpaceConstWeighting(1.0, exponent)
 
     def __len__(self):
-        """Return ``len(self)``."""
-        return self.size
+        """Return ``len(self)``.
+
+        This length is the number of spaces at the top level only,
+        and is equal to ``self.shape[0]``.
+        """
+        return len(self.spaces)
+
+    @property
+    def nbytes(self):
+        """Total number of bytes in memory used by an element of this space."""
+        return sum(spc.nbytes for spc in self.spaces)
 
     @property
     def shape(self):
-        """Number of spaces per axis."""
-        # Currently supporting only 1d product spaces
-        return (self.size,)
+        """Total spaces per axis, computed recursively.
+
+        The recursion ends at the fist level that does not have a shape.
+
+        Examples
+        --------
+        >>> r2, r3 = odl.rn(2), odl.rn(3)
+        >>> pspace = odl.ProductSpace(r2, r3)
+        >>> pspace.shape
+        (2,)
+        >>> pspace2 = odl.ProductSpace(pspace, 3)
+        >>> pspace2.shape
+        (3, 2)
+
+        If the space is a "pure" product space, shape recurses all the way
+        into the components:
+
+        >>> r2_2 = odl.ProductSpace(r2, 3)
+        >>> r2_2.shape
+        (3, 2)
+        """
+        if len(self) == 0:
+            return ()
+        elif self.is_power_space:
+            try:
+                sub_shape = self[0].shape
+            except AttributeError:
+                sub_shape = ()
+        else:
+            sub_shape = ()
+
+        return (len(self),) + sub_shape
+
+    @property
+    def size(self):
+        """Total number of involved spaces, computed recursively.
+
+        The recursion ends at the fist level that does not comprise
+        a *power* space, i.e., which is not made of equal spaces.
+
+        Examples
+        --------
+        >>> r2, r3 = odl.rn(2), odl.rn(3)
+        >>> pspace = odl.ProductSpace(r2, r3)
+        >>> pspace.size
+        2
+        >>> pspace2 = odl.ProductSpace(pspace, 3)
+        >>> pspace2.size
+        6
+        """
+        return (0 if self.shape == () else
+                int(np.prod(self.shape, dtype='int64')))
 
     @property
     def spaces(self):
@@ -333,8 +363,10 @@ class ProductSpace(LinearSpace):
 
     @property
     def is_weighted(self):
-        """Return ``True`` if weighting is not `ProductSpaceNoWeighting`."""
-        return not isinstance(self.weighting, ProductSpaceNoWeighting)
+        """Return ``True`` if the space is not weighted by constant 1.0."""
+        return not (
+            isinstance(self.weighting, ProductSpaceConstWeighting) and
+            self.weighting.const == 1.0)
 
     @property
     def dtype(self):
@@ -354,6 +386,55 @@ class ProductSpace(LinearSpace):
             return dtypes[0]
         else:
             raise AttributeError("`dtype`'s of subspaces not equal")
+
+    @property
+    def is_real(self):
+        """True if this is a space of real valued vectors."""
+        return all(spc.is_real for spc in self.spaces)
+
+    @property
+    def is_complex(self):
+        """True if this is a space of complex valued vectors."""
+        return all(spc.is_complex for spc in self.spaces)
+
+    @property
+    def real_space(self):
+        """Variant of this space with real dtype."""
+        return ProductSpace(*[space.real_space for space in self.spaces])
+
+    @property
+    def complex_space(self):
+        """Variant of this space with complex dtype."""
+        return ProductSpace(*[space.complex_space for space in self.spaces])
+
+    def astype(self, dtype):
+        """Return a copy of this space with new ``dtype``.
+
+        Parameters
+        ----------
+        dtype :
+            Scalar data type of the returned space. Can be provided
+            in any way the `numpy.dtype` constructor understands, e.g.
+            as built-in type or as a string. Data types with non-trivial
+            shapes are not allowed.
+
+        Returns
+        -------
+        newspace : `ProductSpace`
+            Version of this space with given data type.
+        """
+        if dtype is None:
+            # Need to filter this out since Numpy iterprets it as 'float'
+            raise ValueError('`None` is not a valid data type')
+
+        dtype = np.dtype(dtype)
+        current_dtype = getattr(self, 'dtype', object)
+
+        if dtype == current_dtype:
+            return self
+        else:
+            return ProductSpace(*[space.astype(dtype)
+                                  for space in self.spaces])
 
     def element(self, inp=None, cast=True):
         """Create an element in the product space.
@@ -395,10 +476,12 @@ class ProductSpace(LinearSpace):
         >>> x2 = r2.element([1, 2])
         >>> x3 = r3.element([1, 2, 3])
         >>> x = prod.element([x2, x3])
-        >>> print(x)
-        {[1.0, 2.0], [1.0, 2.0, 3.0]}
+        >>> x
+        ProductSpace(rn(2), rn(3)).element([
+            [ 1.,  2.],
+            [ 1.,  2.,  3.]
+        ])
         """
-
         # If data is given as keyword arg, prefer it over arg list
         if inp is None:
             inp = [space.element() for space in self.spaces]
@@ -547,7 +630,7 @@ class ProductSpace(LinearSpace):
             return True
         else:
             return (isinstance(other, ProductSpace) and
-                    self.shape == other.shape and
+                    len(self) == len(other) and
                     self.weighting == other.weighting and
                     all(x == y for x, y in zip(self.spaces,
                                                other.spaces)))
@@ -557,54 +640,149 @@ class ProductSpace(LinearSpace):
         return hash((type(self), self.spaces, self.weighting))
 
     def __getitem__(self, indices):
-        """Return ``self[indices]``."""
+        """Return ``self[indices]``.
+
+        Examples
+        --------
+        Integers are used to pick components, slices to pick ranges:
+
+        >>> r2, r3, r4 = odl.rn(2), odl.rn(3), odl.rn(4)
+        >>> pspace = odl.ProductSpace(r2, r3, r4)
+        >>> pspace[1]
+        rn(3)
+        >>> pspace[1:]
+        ProductSpace(rn(3), rn(4))
+
+        With lists, arbitrary components can be stacked together:
+
+        >>> pspace[[0, 2, 1, 2]]
+        ProductSpace(rn(2), rn(4), rn(3), rn(4))
+
+        Tuples, i.e. multi-indices, will recursively index higher-order
+        product spaces. However, remaining indices cannot be passed
+        down to component spaces that are not product spaces:
+
+        >>> pspace2 = odl.ProductSpace(pspace, 3)  # 2nd order product space
+        >>> pspace2
+        ProductSpace(ProductSpace(rn(2), rn(3), rn(4)), 3)
+        >>> pspace2[0]
+        ProductSpace(rn(2), rn(3), rn(4))
+        >>> pspace2[1, 0]
+        rn(2)
+        >>> pspace2[:-1, 0]
+        ProductSpace(rn(2), 2)
+        """
         if isinstance(indices, Integral):
             return self.spaces[indices]
+
         elif isinstance(indices, slice):
-            return ProductSpace(*self.spaces[indices],
-                                field=self.field)
-        else:
+            return ProductSpace(*self.spaces[indices], field=self.field)
+
+        elif isinstance(indices, tuple):
+            # Use tuple indexing for recursive product spaces, i.e.,
+            # pspace[0, 0] == pspace[0][0]
+            if not indices:
+                return self
+            idx = indices[0]
+            if isinstance(idx, Integral):
+                # Single integer in tuple, picking that space and passing
+                # through the rest of the tuple. If the picked space
+                # is not a product space and there are still indices left,
+                # raise an error.
+                space = self.spaces[idx]
+                rest_indcs = indices[1:]
+                if not rest_indcs:
+                    return space
+                elif isinstance(space, ProductSpace):
+                    return space[rest_indcs]
+                else:
+                    raise IndexError('too many indices for recursive '
+                                     'product space: remaining indices '
+                                     '{}'.format(rest_indcs))
+            elif isinstance(idx, slice):
+                # Doing the same as with single integer with all spaces
+                # in the slice, but wrapping the result into a ProductSpace.
+                spaces = self.spaces[idx]
+                rest_indcs = indices[1:]
+                if len(spaces) == 0 and rest_indcs:
+                    # Need to catch this situation since the code further
+                    # down doesn't trigger an error
+                    raise IndexError('too many indices for recursive '
+                                     'product space: remaining indices '
+                                     '{}'.format(rest_indcs))
+                if not rest_indcs:
+                    return ProductSpace(*spaces)
+                elif all(isinstance(space, ProductSpace) for space in spaces):
+                    return ProductSpace(
+                        *(space[rest_indcs] for space in spaces),
+                        field=self.field)
+                else:
+                    raise IndexError('too many indices for recursive '
+                                     'product space: remaining indices '
+                                     '{}'.format(rest_indcs))
+            else:
+                raise TypeError('index tuple can only contain'
+                                'integers or slices')
+
+        elif isinstance(indices, list):
             return ProductSpace(*[self.spaces[i] for i in indices],
                                 field=self.field)
 
+        else:
+            raise TypeError('`indices` must be integer, slice, tuple or '
+                            'list, got {!r}'.format(indices))
+
     def __str__(self):
         """Return ``str(self)``."""
-        if self.size == 0:
+        if len(self) == 0:
             return '{}'
-        elif all(self.spaces[0] == space for space in self.spaces):
-            return '{' + str(self.spaces[0]) + '}^' + str(self.size)
+        elif self.is_power_space:
+            return '({}) ** {}'.format(self.spaces[0], len(self))
         else:
             return ' x '.join(str(space) for space in self.spaces)
 
     def __repr__(self):
         """Return ``repr(self)``."""
         weight_str = self.weighting.repr_part
-        if self.size == 0:
+        edgeitems = np.get_printoptions()['edgeitems']
+        if len(self) == 0:
             posargs = []
+            posmod = ''
             optargs = [('field', self.field, None)]
             oneline = True
         elif self.is_power_space:
-            posargs = [self.spaces[0], self.size]
+            posargs = [self.spaces[0], len(self)]
+            posmod = '!r'
             optargs = []
             oneline = True
-        else:
+        elif self.size <= 2 * edgeitems:
             posargs = self.spaces
+            posmod = '!r'
             optargs = []
             argstr = ', '.join(repr(s) for s in self.spaces)
             oneline = (len(argstr + weight_str) <= 40 and
                        '\n' not in argstr + weight_str)
+        else:
+            posargs = (self.spaces[:edgeitems] +
+                       ('...',) +
+                       self.spaces[-edgeitems:])
+            posmod = ['!r'] * edgeitems + ['!s'] + ['!r'] * edgeitems
+            optargs = []
+            oneline = False
 
         if oneline:
-            inner_str = signature_string(posargs, optargs, sep=', ', mod='!r')
+            inner_str = signature_string(posargs, optargs, sep=', ',
+                                         mod=[posmod, '!r'])
             if weight_str:
                 inner_str = ', '.join([inner_str, weight_str])
             return '{}({})'.format(self.__class__.__name__, inner_str)
         else:
-            inner_str = signature_string(posargs, optargs, sep=',\n', mod='!r')
+            inner_str = signature_string(posargs, optargs, sep=',\n',
+                                         mod=[posmod, '!r'])
             if weight_str:
                 inner_str = ',\n'.join([inner_str, weight_str])
             return '{}(\n{}\n)'.format(self.__class__.__name__,
-                                       indent_rows(inner_str))
+                                       indent(inner_str))
 
     @property
     def element_type(self):
@@ -618,7 +796,7 @@ class ProductSpaceElement(LinearSpaceElement):
 
     def __init__(self, space, parts):
         """Initialize a new instance."""
-        super().__init__(space)
+        super(ProductSpaceElement, self).__init__(space)
         self.__parts = tuple(parts)
 
     @property
@@ -627,9 +805,68 @@ class ProductSpaceElement(LinearSpaceElement):
         return self.__parts
 
     @property
+    def shape(self):
+        """Number of values per axis in ``self``, computed recursively.
+
+        The recursion ends at the fist level that does not have a shape.
+
+        Raises
+        ------
+        ValueError
+            If a `ProductSpace` is encountered that is not a power space.
+
+        See Also
+        --------
+        ProductSpace.shape
+
+        Examples
+        --------
+        >>> r4_3 = odl.ProductSpace(odl.rn(4), 3)
+        >>> x = r4_3.element()
+        >>> x.shape
+        (3, 4)
+        >>> r4_2_3 = odl.ProductSpace(r4_3, 2)
+        >>> y = r4_2_3.element()
+        >>> y.shape
+        (2, 3, 4)
+        """
+        return self.space.shape
+
+    @property
+    def ndim(self):
+        """Number axes in ``self``, computed recursively.
+
+        Raises
+        ------
+        ValueError
+            If a `ProductSpace` is encountered that is not a power space.
+
+        See Also
+        --------
+        shape
+
+        Examples
+        --------
+        >>> r4_3 = odl.ProductSpace(odl.rn(4), 3)
+        >>> x = r4_3.element()
+        >>> x.ndim
+        2
+        >>> r4_2_3 = odl.ProductSpace(r4_3, 2)
+        >>> y = r4_2_3.element()
+        >>> y.ndim
+        3
+        """
+        return len(self.shape)
+
+    @property
     def size(self):
-        """Number of factors of this element's space."""
-        return self.space.size
+        """Total number of involved spaces, computed recursively.
+
+        See Also
+        --------
+        ProductSpace.size
+        """
+        return int(np.prod(self.shape))
 
     @property
     def dtype(self):
@@ -640,13 +877,17 @@ class ProductSpaceElement(LinearSpaceElement):
         """Return ``len(self)``."""
         return len(self.space)
 
+    @property
+    def nbytes(self):
+        """Total number of bytes in memory used by this element."""
+        return self.space.nbytes
+
     def __eq__(self, other):
         """Return ``self == other``.
 
-        Overrides the default `LinearSpace` method since it is
-        implemented with the distance function, which is prone to
-        numerical errors. This function checks equality per
-        component.
+        Overrides the default `LinearSpace` method since it is implemented with
+        the distance function, which is prone to numerical errors. This
+        function checks equality per component.
         """
         if other is self:
             return True
@@ -664,6 +905,44 @@ class ProductSpaceElement(LinearSpaceElement):
         elif isinstance(indices, list):
             out_parts = [self.parts[i] for i in indices]
             return self.space[indices].element(out_parts)
+        elif isinstance(indices, tuple):
+            if len(indices) == 0:
+                return ProductSpace().element()
+            elif len(indices) == 1:
+                # Tuple with a single entry - we just unpack and delegate
+                return self[indices[0]]
+            else:
+                # Tuple with multiple entries
+                if isinstance(indices[0], Integral):
+                    # In case the first entry is an integer, we drop the
+                    # axis and return directly from `parts`
+                    return self.parts[indices[0]][indices[1:]]
+                else:
+                    # indices[0] is a slice or list. We first retrieve the
+                    # parts indexed in this axis.
+                    # In any case we know that we want to keep this axis.
+                    if isinstance(indices[0], list):
+                        part = [self.parts[i] for i in indices[0]]
+                    else:
+                        part = self.parts[indices[0]]
+
+                    if (len(indices[1:]) == 1 and
+                            not all(isinstance(p, ProductSpaceElement)
+                                    for p in part)):
+                        # This case means we have "hit the bottom", i.e.,
+                        # there are non-ProductSpaces involved. In order
+                        # not to retrieve scalar values from these
+                        # elements, we use a slice of size 1.
+                        idx = indices[1]
+                        indexed = [p[idx:idx + 1] for p in part]
+                    else:
+                        # Here we're still in the "product space chain",
+                        # so we can use recursion to go on.
+                        indexed = [p[indices[1:]] for p in part]
+
+                    # Finally make a wrapping space for the indexed elements
+                    new_space = ProductSpace(*(p.space for p in indexed))
+                    return new_space.element(indexed)
         else:
             raise TypeError('bad index type {}'.format(type(indices)))
 
@@ -677,6 +956,21 @@ class ProductSpaceElement(LinearSpaceElement):
             indexed_parts = self.parts[indices]
         elif isinstance(indices, list):
             indexed_parts = tuple(self.parts[i] for i in indices)
+        elif isinstance(indices, tuple):
+            if len(indices) == 0:
+                return
+            else:
+                # We need to explicitly use __setitem__ here, otherwise
+                # __getitem__ is used and assigned to, which fails if
+                # a space like rn(3) is indexed at the very end.
+                part = self.parts[indices[0]]
+                if isinstance(part, LinearSpaceElement):
+                    part.__setitem__(indices[1:], values)
+                else:
+                    # part is a tuple
+                    for p in part:
+                        p.__setitem__(indices[1:], values)
+                return
         else:
             raise TypeError('bad index type {}'.format(type(indices)))
 
@@ -705,12 +999,95 @@ class ProductSpaceElement(LinearSpaceElement):
                 for p, v in zip(indexed_parts, values):
                     p[:] = v
 
+    def asarray(self, out=None):
+        """Extract the data of this vector as a numpy array.
+
+        Only available if `is_power_space` is True.
+
+        The ordering is such that it commutes with indexing::
+
+            self[ind].asarray() == self.asarray()[ind]
+
+        Parameters
+        ----------
+        out : `numpy.ndarray`, optional
+            Array in which the result should be written in-place.
+            Has to be contiguous and of the correct dtype and
+            shape.
+
+        Raises
+        ------
+        ValueError
+            If `is_power_space` is false.
+
+        Examples
+        --------
+        >>> spc = odl.ProductSpace(odl.rn(3), 2)
+        >>> x = spc.element([[ 1.,  2.,  3.],
+        ...                  [ 4.,  5.,  6.]])
+        >>> x.asarray()
+        array([[ 1.,  2.,  3.],
+               [ 4.,  5.,  6.]])
+        """
+        if not self.space.is_power_space:
+            raise ValueError('cannot use `asarray` if `space.is_power_space` '
+                             'is `False`')
+        else:
+            if out is None:
+                out = np.empty(self.shape, self.dtype)
+
+            for i in range(len(self)):
+                out[i] = np.asarray(self[i])
+            return out
+
+    def __array__(self):
+        """An array representation of ``self``.
+
+        Only available if `is_power_space` is True.
+
+        The ordering is such that it commutes with indexing::
+
+            np.array(self[ind]) == np.array(self)[ind]
+
+        Raises
+        ------
+        ValueError
+            If `is_power_space` is false.
+
+        Examples
+        --------
+        >>> spc = odl.ProductSpace(odl.rn(3), 2)
+        >>> x = spc.element([[ 1.,  2.,  3.],
+        ...                  [ 4.,  5.,  6.]])
+        >>> np.asarray(x)
+        array([[ 1.,  2.,  3.],
+               [ 4.,  5.,  6.]])
+        """
+        return self.asarray()
+
+    def __array_wrap__(self, array):
+        """Return a new product space element wrapping the ``array``.
+
+        Only available if `is_power_space` is ``True``.
+
+        Parameters
+        ----------
+        array : `numpy.ndarray`
+            Array to be wrapped.
+
+        Returns
+        -------
+        wrapper : `ProductSpaceElement`
+            Product space element wrapping ``array``.
+        """
+        return self.space.element(array)
+
     @property
     def ufuncs(self):
         """`ProductSpaceUfuncs`, access to Numpy style ufuncs.
 
         These are always available if the underlying spaces are
-        `NtuplesBase`.
+        `TensorSpace`.
 
         Examples
         --------
@@ -718,8 +1095,8 @@ class ProductSpaceElement(LinearSpaceElement):
         >>> x = r22.element([[1, -2], [-3, 4]])
         >>> x.ufuncs.absolute()
         ProductSpace(rn(2), 2).element([
-            [1.0, 2.0],
-            [3.0, 4.0]
+            [ 1.,  2.],
+            [ 3.,  4.]
         ])
 
         These functions can also be used with non-vector arguments and
@@ -727,13 +1104,13 @@ class ProductSpaceElement(LinearSpaceElement):
 
         >>> x.ufuncs.add([1, 2])
         ProductSpace(rn(2), 2).element([
-            [2.0, 0.0],
-            [-2.0, 6.0]
+            [ 2.,  0.],
+            [-2.,  6.]
         ])
         >>> x.ufuncs.subtract(1)
         ProductSpace(rn(2), 2).element([
-            [0.0, -3.0],
-            [-4.0, 3.0]
+            [ 0., -3.],
+            [-4.,  3.]
         ])
 
         There is also support for various reductions (sum, prod, min, max):
@@ -747,26 +1124,196 @@ class ProductSpaceElement(LinearSpaceElement):
         >>> result = x.ufuncs.absolute(out=y)
         >>> result
         ProductSpace(rn(2), 2).element([
-            [1.0, 2.0],
-            [3.0, 4.0]
+            [ 1.,  2.],
+            [ 3.,  4.]
         ])
         >>> result is y
         True
 
         See Also
         --------
-        odl.util.ufuncs.NtuplesBaseUfuncs
-            Base class for ufuncs in `NtuplesBase` spaces, subspaces may
+        odl.util.ufuncs.TensorSpaceUfuncs
+            Base class for ufuncs in `TensorSpace` spaces, subspaces may
             override this for greater efficiency.
         odl.util.ufuncs.ProductSpaceUfuncs
             For a list of available ufuncs.
         """
         return ProductSpaceUfuncs(self)
 
+    @property
+    def real(self):
+        """Real part of the element.
+
+        The real part can also be set using ``x.real = other``, where ``other``
+        is array-like or scalar.
+
+        Examples
+        --------
+        >>> space = odl.ProductSpace(odl.cn(3), odl.cn(2))
+        >>> x = space.element([[1 + 1j, 2, 3 - 3j],
+        ...                    [-1 + 2j, -2 - 3j]])
+        >>> x.real
+        ProductSpace(rn(3), rn(2)).element([
+            [ 1.,  2.,  3.],
+            [-1., -2.]
+        ])
+
+        The real part can also be set using different array-like types:
+
+        >>> x.real = space.real_space.zero()
+        >>> x
+        ProductSpace(cn(3), cn(2)).element([
+            [ 0.+1.j,  0.+0.j,  0.-3.j],
+            [ 0.+2.j,  0.-3.j]
+        ])
+
+        >>> x.real = 1.0
+        >>> x
+        ProductSpace(cn(3), cn(2)).element([
+            [ 1.+1.j,  1.+0.j,  1.-3.j],
+            [ 1.+2.j,  1.-3.j]
+        ])
+
+        >>> x.real = [[2, 3, 4], [5, 6]]
+        >>> x
+        ProductSpace(cn(3), cn(2)).element([
+            [ 2.+1.j,  3.+0.j,  4.-3.j],
+            [ 5.+2.j,  6.-3.j]
+        ])
+        """
+        real_part = [part.real for part in self.parts]
+        return self.space.real_space.element(real_part)
+
+    @real.setter
+    def real(self, newreal):
+        """Setter for the real part.
+
+        This method is invoked by ``x.real = other``.
+
+        Parameters
+        ----------
+        newreal : array-like or scalar
+            Values to be assigned to the real part of this element.
+        """
+        try:
+            iter(newreal)
+        except TypeError:
+            # `newreal` is not iterable, assume it can be assigned to
+            # all indexed parts
+            for part in self.parts:
+                part.real = newreal
+            return
+
+        if self.space.is_power_space:
+            try:
+                # Set same value in all parts
+                for part in self.parts:
+                    part.real = newreal
+            except (ValueError, TypeError):
+                # Iterate over all parts and set them separately
+                for part, new_re in zip(self.parts, newreal):
+                    part.real = new_re
+                pass
+        elif len(newreal) == len(self):
+            for part, new_re in zip(self.parts, newreal):
+                part.real = new_re
+        else:
+            raise ValueError(
+                'dimensions of the new real part does not match the space, '
+                'got element {} to set real part of {}'.format(newreal, self))
+
+    @property
+    def imag(self):
+        """Imaginary part of the element.
+
+        The imaginary part can also be set using ``x.imag = other``, where
+        ``other`` is array-like or scalar.
+
+
+        Examples
+        --------
+        >>> space = odl.ProductSpace(odl.cn(3), odl.cn(2))
+        >>> x = space.element([[1 + 1j, 2, 3 - 3j],
+        ...                    [-1 + 2j, -2 - 3j]])
+        >>> x.imag
+        ProductSpace(rn(3), rn(2)).element([
+            [ 1.,  0., -3.],
+            [ 2., -3.]
+        ])
+
+        The imaginary part can also be set using different array-like types:
+
+        >>> x.imag = space.real_space.zero()
+        >>> x
+        ProductSpace(cn(3), cn(2)).element([
+            [ 1.+0.j,  2.+0.j,  3.+0.j],
+            [-1.+0.j, -2.+0.j]
+        ])
+
+        >>> x.imag = 1.0
+        >>> x
+        ProductSpace(cn(3), cn(2)).element([
+            [ 1.+1.j,  2.+1.j,  3.+1.j],
+            [-1.+1.j, -2.+1.j]
+        ])
+
+        >>> x.imag = [[2, 3, 4], [5, 6]]
+        >>> x
+        ProductSpace(cn(3), cn(2)).element([
+            [ 1.+2.j,  2.+3.j,  3.+4.j],
+            [-1.+5.j, -2.+6.j]
+        ])
+        """
+        imag_part = [part.imag for part in self.parts]
+        return self.space.real_space.element(imag_part)
+
+    @imag.setter
+    def imag(self, newimag):
+        """Setter for the imaginary part.
+
+        This method is invoked by ``x.imag = other``.
+
+        Parameters
+        ----------
+        newimag : array-like or scalar
+            Values to be assigned to the imaginary part of this element.
+        """
+        try:
+            iter(newimag)
+        except TypeError:
+            # `newimag` is not iterable, assume it can be assigned to
+            # all indexed parts
+            for part in self.parts:
+                part.imag = newimag
+            return
+
+        if self.space.is_power_space:
+            try:
+                # Set same value in all parts
+                for part in self.parts:
+                    part.imag = newimag
+            except (ValueError, TypeError):
+                # Iterate over all parts and set them separately
+                for part, new_im in zip(self.parts, newimag):
+                    part.imag = new_im
+                pass
+        elif len(newimag) == len(self):
+            for part, new_im in zip(self.parts, newimag):
+                part.imag = new_im
+        else:
+            raise ValueError(
+                'dimensions of the new imaginary part does not match the '
+                'space, got element {} to set real part of {}}'
+                ''.format(newimag, self))
+
+    def conj(self):
+        """Complex conjugate of the element."""
+        complex_conj = [part.conj() for part in self.parts]
+        return self.space.element(complex_conj)
+
     def __str__(self):
         """Return ``str(self)``."""
-        inner_str = ', '.join(str(part) for part in self.parts)
-        return '{{{}}}'.format(inner_str)
+        return repr(self)
 
     def __repr__(self):
         """Return ``repr(self)``.
@@ -784,11 +1331,11 @@ class ProductSpaceElement(LinearSpaceElement):
 
         >>> x
         ProductSpace(rn(2), rn(3)).element([
-            [1.0, 2.0],
-            [3.0, 4.0, 5.0]
+            [ 1.,  2.],
+            [ 3.,  4.,  5.]
         ])
 
-        Nestled spaces work as well
+        Nestled spaces work as well:
 
         >>> X = ProductSpace(r2x3, r2x3)
         >>> x = X.element([[[1, 2], [3, 4, 5]],[[1, 2], [3, 4, 5]]])
@@ -797,12 +1344,12 @@ class ProductSpaceElement(LinearSpaceElement):
         >>> x
         ProductSpace(ProductSpace(rn(2), rn(3)), 2).element([
             [
-                [1.0, 2.0],
-                [3.0, 4.0, 5.0]
+                [ 1.,  2.],
+                [ 3.,  4.,  5.]
             ],
             [
-                [1.0, 2.0],
-                [3.0, 4.0, 5.0]
+                [ 1.,  2.],
+                [ 3.,  4.,  5.]
             ]
         ])
         """
@@ -876,7 +1423,7 @@ class ProductSpaceElement(LinearSpaceElement):
         --------
         odl.discr.lp_discr.DiscreteLpElement.show :
             Display of a discretized function
-        odl.space.base_ntuples.NtuplesBaseVector.show :
+        odl.space.base_tensors.Tensor.show :
             Display of sequence type data
         odl.util.graphics.show_discrete_data :
             Underlying implementation
@@ -886,9 +1433,9 @@ class ProductSpaceElement(LinearSpaceElement):
 
         if indices is None:
             if len(self) < 5:
-                indices = list(range(self.size))
+                indices = list(range(len(self)))
             else:
-                indices = list(np.linspace(0, self.size - 1, 4, dtype=int))
+                indices = list(np.linspace(0, len(self) - 1, 4, dtype=int))
         else:
             if (isinstance(indices, tuple) or
                     (isinstance(indices, list) and
@@ -904,7 +1451,7 @@ class ProductSpaceElement(LinearSpaceElement):
                 indices = slice(None)
 
             if isinstance(indices, slice):
-                indices = list(range(*indices.indices(self.size)))
+                indices = list(range(*indices.indices(len(self))))
             elif isinstance(indices, Integral):
                 indices = [indices]
             else:
@@ -932,7 +1479,9 @@ class ProductSpaceElement(LinearSpaceElement):
         return tuple(figs)
 
 
-# --- Add arithmetic operators that broadcast ---
+# --- Add arithmetic operators that broadcast --- #
+
+
 def _broadcast_arithmetic(op):
     """Return ``op(self, other)`` with broadcasting.
 
@@ -995,8 +1544,8 @@ class ProductSpaceArrayWeighting(ArrayWeighting):
     See ``Notes`` for mathematical details.
     """
 
-    def __init__(self, array, exponent=2.0, dist_using_inner=False):
-        """Initialize a new instance.
+    def __init__(self, array, exponent=2.0):
+        r"""Initialize a new instance.
 
         Parameters
         ----------
@@ -1005,16 +1554,6 @@ class ProductSpaceArrayWeighting(ArrayWeighting):
         exponent : positive float, optional
             Exponent of the norm. For values other than 2.0, no inner
             product is defined.
-        dist_using_inner : bool, optional
-            Calculate ``dist`` using the formula
-
-                ``||x - y||^2 = ||x||^2 + ||y||^2 - 2 * Re <x, y>``.
-
-            This avoids the creation of new arrays and is thus faster
-            for large arrays. On the downside, it will not evaluate to
-            exactly zero for equal (but not identical) ``x`` and ``y``.
-
-            Can only be used if ``exponent`` is 2.0.
 
         Notes
         -----
@@ -1022,7 +1561,7 @@ class ProductSpaceArrayWeighting(ArrayWeighting):
           :math:`w` is defined as
 
           .. math::
-              \\langle x, y \\rangle_w = \\langle w \odot x, y \\rangle
+              \langle x, y \rangle_w = \langle w \odot x, y \rangle
 
           with component-wise multiplication :math:`w \odot x`. For other
           exponents, only ``norm`` and ``dist`` are defined. In the case
@@ -1040,8 +1579,8 @@ class ProductSpaceArrayWeighting(ArrayWeighting):
           in :math:`p`, i.e.,
 
           .. math::
-              \|x\|_{w,p} \\not\\to \|x\|_{w,\infty}
-              \quad\\text{for } p \\to \infty
+              \|x\|_{w,p} \not\to \|x\|_{w,\infty}
+              \quad\text{for } p \to \infty
 
           unless :math:`w = (1,...,1)`. The reason for this choice
           is that the alternative with the limit property consists in
@@ -1051,8 +1590,8 @@ class ProductSpaceArrayWeighting(ArrayWeighting):
           define an inner product or norm, respectively. This is not checked
           during initialization.
         """
-        super().__init__(array, impl='numpy', exponent=exponent,
-                         dist_using_inner=dist_using_inner)
+        super(ProductSpaceArrayWeighting, self).__init__(
+            array, impl='numpy', exponent=exponent)
 
     def inner(self, x1, x2):
         """Calculate the array-weighted inner product of two elements.
@@ -1115,8 +1654,8 @@ class ProductSpaceConstWeighting(ConstWeighting):
 
     """
 
-    def __init__(self, constant, exponent=2.0, dist_using_inner=False):
-        """Initialize a new instance.
+    def __init__(self, constant, exponent=2.0):
+        r"""Initialize a new instance.
 
         Parameters
         ----------
@@ -1125,16 +1664,6 @@ class ProductSpaceConstWeighting(ConstWeighting):
         exponent : positive float, optional
             Exponent of the norm. For values other than 2.0, no inner
             product is defined.
-        dist_using_inner : bool, optional
-            Calculate ``dist`` using the formula
-
-                ``||x - y||^2 = ||x||^2 + ||y||^2 - 2 * Re <x, y>``
-
-            This avoids the creation of new arrays and is thus faster
-            for large arrays. On the downside, it will not evaluate to
-            exactly zero for equal (but not identical) ``x`` and ``y``.
-
-            Can only be used if ``exponent`` is 2.0.
 
         Notes
         -----
@@ -1142,7 +1671,7 @@ class ProductSpaceConstWeighting(ConstWeighting):
           :math:`c` is defined as
 
           .. math::
-            \\langle x, y \\rangle_c = c\, \\langle x, y \\rangle.
+            \langle x, y \rangle_c = c\, \langle x, y \rangle.
 
           For other exponents, only ``norm`` and ```dist`` are defined.
           In the case of exponent ``inf``, the weighted norm is
@@ -1159,8 +1688,8 @@ class ProductSpaceConstWeighting(ConstWeighting):
           in :math:`p`, i.e.,
 
           .. math::
-              \|x\|_{c,p} \\not\\to \|x\|_{c,\infty}
-              \quad \\text{for } p \\to \infty
+              \|x\|_{c,p} \not\to \|x\|_{c,\infty}
+              \quad \text{for } p \to \infty
 
           unless :math:`c = 1`. The reason for this choice
           is that the alternative with the limit property consists in
@@ -1169,8 +1698,8 @@ class ProductSpaceConstWeighting(ConstWeighting):
         - The constant must be positive, otherwise it does not define an
           inner product or norm, respectively.
         """
-        super().__init__(constant, impl='numpy', exponent=exponent,
-                         dist_using_inner=dist_using_inner)
+        super(ProductSpaceConstWeighting, self).__init__(
+            constant, impl='numpy', exponent=exponent)
 
     def inner(self, x1, x2):
         """Calculate the constant-weighted inner product of two elements.
@@ -1237,94 +1766,22 @@ class ProductSpaceConstWeighting(ConstWeighting):
         dist : float
             The distance between the elements.
         """
-        if self.dist_using_inner:
-            norms1 = np.fromiter(
-                (x1i.norm() for x1i in x1),
-                dtype=np.float64, count=len(x1))
-            norm1 = np.linalg.norm(norms1)
+        dnorms = np.fromiter(
+            ((x1i - x2i).norm() for x1i, x2i in zip(x1, x2)),
+            dtype=np.float64, count=len(x1))
 
-            norms2 = np.fromiter(
-                (x2i.norm() for x2i in x2),
-                dtype=np.float64, count=len(x2))
-            norm2 = np.linalg.norm(norms2)
-
-            inners = np.fromiter(
-                (x1i.inner(x2i) for x1i, x2i in zip(x1, x2)),
-                dtype=x1[0].space.dtype, count=len(x1))
-            inner_re = np.sum(inners.real)
-
-            dist_squared = norm1 ** 2 + norm2 ** 2 - 2 * inner_re
-            if dist_squared < 0.0:  # Compensate for numerical error
-                dist_squared = 0.0
-            return np.sqrt(self.const) * float(np.sqrt(dist_squared))
+        if self.exponent == float('inf'):
+            return self.const * np.linalg.norm(dnorms, ord=self.exponent)
         else:
-            dnorms = np.fromiter(
-                ((x1i - x2i).norm() for x1i, x2i in zip(x1, x2)),
-                dtype=np.float64, count=len(x1))
-
-            if self.exponent == float('inf'):
-                return self.const * np.linalg.norm(dnorms, ord=self.exponent)
-            else:
-                return (self.const ** (1 / self.exponent) *
-                        np.linalg.norm(dnorms, ord=self.exponent))
-
-
-class ProductSpaceNoWeighting(NoWeighting, ProductSpaceConstWeighting):
-
-    """Weighting of `ProductSpace` with constant 1."""
-
-    # Implement singleton pattern for efficiency in the default case
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        """Implement singleton pattern if ``exp==2.0``."""
-        if len(args) == 0:
-            exponent = kwargs.pop('exponent', 2.0)
-            dist_using_inner = kwargs.pop('dist_using_inner', False)
-        elif len(args) == 1:
-            exponent = args[0]
-            args = args[1:]
-            dist_using_inner = kwargs.pop('dist_using_inner', False)
-        else:
-            exponent = args[0]
-            dist_using_inner = args[1]
-            args = args[2:]
-
-        if exponent == 2.0 and not dist_using_inner:
-            if not cls._instance:
-                cls._instance = super().__new__(cls, *args, **kwargs)
-            return cls._instance
-        else:
-            return super().__new__(cls, *args, **kwargs)
-
-    def __init__(self, exponent=2.0, dist_using_inner=False):
-        """Initialize a new instance.
-
-        Parameters
-        ----------
-        exponent : positive float, optional
-            Exponent of the norm. For values other than 2.0, the inner
-            product is not defined.
-        dist_using_inner : bool, optional
-            Calculate ``dist`` using the formula
-
-                ``||x - y||^2 = ||x||^2 + ||y||^2 - 2 * Re <x, y>``
-
-            This avoids the creation of new arrays and is thus faster
-            for large arrays. On the downside, it will not evaluate to
-            exactly zero for equal (but not identical) ``x`` and ``y``.
-
-            Can only be used if ``exponent`` is 2.0.
-        """
-        super().__init__(impl='numpy', exponent=exponent,
-                         dist_using_inner=dist_using_inner)
+            return (self.const ** (1 / self.exponent) *
+                    np.linalg.norm(dnorms, ord=self.exponent))
 
 
 class ProductSpaceCustomInner(CustomInner):
 
     """Class for handling a user-specified inner products."""
 
-    def __init__(self, inner, dist_using_inner=False):
+    def __init__(self, inner):
         """Initialize a new instance.
 
         Parameters
@@ -1339,20 +1796,9 @@ class ProductSpaceCustomInner(CustomInner):
             - ``<x, y> = conj(<y, x>)``
             - ``<s*x + y, z> = s * <x, z> + <y, z>``
             - ``<x, x> = 0``  if and only if  ``x = 0``
-
-        dist_using_inner : bool, optional
-            Calculate ``dist`` using the formula
-
-                ``||x - y||^2 = ||x||^2 + ||y||^2 - 2 * Re <x, y>``
-
-            This avoids the creation of new arrays and is thus faster
-            for large arrays. On the downside, it will not evaluate to
-            exactly zero for equal (but not identical) ``x`` and ``y``.
-
-            Can only be used if ``exponent`` is 2.0.
         """
-        super().__init__(impl='numpy', inner=inner,
-                         dist_using_inner=dist_using_inner)
+        super(ProductSpaceCustomInner, self).__init__(
+            impl='numpy', inner=inner)
 
 
 class ProductSpaceCustomNorm(CustomNorm):
@@ -1378,7 +1824,7 @@ class ProductSpaceCustomNorm(CustomNorm):
             - ``||s * x|| = |s| * ||x||``
             - ``||x + y|| <= ||x|| + ||y||``
         """
-        super().__init__(norm, impl='numpy')
+        super(ProductSpaceCustomNorm, self).__init__(norm, impl='numpy')
 
 
 class ProductSpaceCustomDist(CustomDist):
@@ -1404,7 +1850,7 @@ class ProductSpaceCustomDist(CustomDist):
             - ``dist(x, y) = dist(y, x)``
             - ``dist(x, y) <= dist(x, z) + dist(z, y)``
         """
-        super().__init__(dist, impl='numpy')
+        super(ProductSpaceCustomDist, self).__init__(dist, impl='numpy')
 
 
 def _strip_space(x):
@@ -1425,6 +1871,5 @@ def _indent(x):
 
 
 if __name__ == '__main__':
-    # pylint: disable=wrong-import-position
     from odl.util.testutils import run_doctests
     run_doctests()

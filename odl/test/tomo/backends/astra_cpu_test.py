@@ -64,7 +64,7 @@ def test_astra_cpu_projector_fanflat():
     det_part = odl.uniform_partition(-6, 6, 6)
     src_rad = 100
     det_rad = 10
-    geom = odl.tomo.FanFlatGeometry(angle_part, det_part, src_rad, det_rad)
+    geom = odl.tomo.FanBeamGeometry(angle_part, det_part, src_rad, det_rad)
 
     # Make projection space
     proj_space = odl.uniform_discr_frompartition(geom.partition,
@@ -82,4 +82,4 @@ def test_astra_cpu_projector_fanflat():
 
 
 if __name__ == '__main__':
-    pytest.main([str(__file__.replace('\\', '/')), '-v'])
+    odl.util.test_file(__file__)

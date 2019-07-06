@@ -249,6 +249,19 @@ def test_partition_getitem():
     assert part[[0, 2]] == lst_part
 
 
+def test_partition_byaxis():
+    """Test indexing a partition along the axes."""
+    part = odl.uniform_partition([-1, -2, -3, -4], [1, 2, 3, 4], (1, 2, 4, 5))
+
+    assert part.byaxis[0] == odl.uniform_partition(-1, 1, 1)
+    assert part.byaxis[1:3] == odl.uniform_partition([-2, -3], [2, 3], (2, 4))
+    assert (part.byaxis[[1, 3, 1]] ==
+            odl.uniform_partition([-2, -4, -2], [2, 4, 2], (2, 5, 2)))
+    assert part.byaxis[[1]] == part.byaxis[1]
+    assert part.byaxis[...] == part
+    assert part.byaxis[:] == part
+
+
 def test_empty_partition():
     """Check if empty partitions behave as expected and all methods work."""
     part = odl.RectPartition(odl.IntervalProd([], []),
@@ -483,5 +496,6 @@ def test_uniform_partition():
             min_pt=min_pt, max_pt=max_pt, shape=shape,
             cell_sides=[0.25, 0.2001])
 
+
 if __name__ == '__main__':
-    pytest.main([str(__file__.replace('\\', '/')), '-v'])
+    odl.util.test_file(__file__)

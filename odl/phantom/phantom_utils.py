@@ -1,4 +1,4 @@
-﻿# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -8,11 +8,7 @@
 
 """Utilities for creating phantoms."""
 
-# Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
-from future import standard_library
-standard_library.install_aliases()
-
 import numpy as np
 
 
@@ -30,6 +26,5 @@ def cylinders_from_ellipses(ellipses):
 
 
 if __name__ == '__main__':
-    # pylint: disable=wrong-import-position
     from odl.util.testutils import run_doctests
     run_doctests()

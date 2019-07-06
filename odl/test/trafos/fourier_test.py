@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -7,32 +7,37 @@
 # obtain one at https://mozilla.org/MPL/2.0/.
 
 from __future__ import division
+
 import numpy as np
 import pytest
 
 import odl
-from odl.trafos.util.ft_utils import (
-    reciprocal_grid, dft_preprocess_data, dft_postprocess_data,
-    _interp_kernel_ft)
 from odl.trafos.fourier import (
     DiscreteFourierTransform, DiscreteFourierTransformInverse,
     FourierTransform)
-from odl.util import (all_almost_equal, never_skip, skip_if_no_pyfftw,
-                      noise_element,
-                      is_real_dtype, conj_exponent, complex_dtype)
+from odl.trafos.util.ft_utils import (
+    _interp_kernel_ft, dft_postprocess_data, dft_preprocess_data,
+    reciprocal_grid)
+from odl.util import (
+    all_almost_equal, complex_dtype, conj_exponent, is_real_dtype,
+    noise_element, skip_if_no_pyfftw)
 from odl.util.testutils import simple_fixture
 
 
 # --- pytest fixtures --- #
 
 
-impl = simple_fixture('impl', [never_skip('numpy'),
-                               skip_if_no_pyfftw('pyfftw')])
+impl = simple_fixture(
+    'impl',
+    [pytest.param('numpy'),
+     pytest.param('pyfftw', marks=skip_if_no_pyfftw)]
+)
 exponent = simple_fixture('exponent', [2.0, 1.0, float('inf'), 1.5])
 sign = simple_fixture('sign', ['-', '+'])
 
 
-# --- helper functions --- #
+# --- Helper functions --- #
+
 
 def _params_from_dtype(dtype):
     if is_real_dtype(dtype):
@@ -87,10 +92,10 @@ def test_dft_init_raise():
 
     # Bad types
     with pytest.raises(TypeError):
-        DiscreteFourierTransform(dom.dspace)
+        DiscreteFourierTransform(dom.tspace)
 
     with pytest.raises(TypeError):
-        DiscreteFourierTransform(dom, dom.dspace)
+        DiscreteFourierTransform(dom, dom.tspace)
 
     # Illegal arguments
     with pytest.raises(ValueError):
@@ -326,19 +331,20 @@ def test_dft_init_plan(impl):
 # ---- FourierTransform ---- #
 
 
-def test_fourier_trafo_range(exponent, floating_dtype):
+def test_fourier_trafo_range(exponent, odl_floating_dtype):
     # Check if the range is initialized correctly. Encompasses the init test
+    dtype = odl_floating_dtype
 
     # Testing R2C for real dtype, else C2C
 
     # 1D
     shape = 10
     space_discr = odl.uniform_discr(0, 1, shape, exponent=exponent,
-                                    impl='numpy', dtype=floating_dtype)
+                                    impl='numpy', dtype=dtype)
 
     dft = FourierTransform(space_discr, halfcomplex=True, shift=True)
     assert dft.range.field == odl.ComplexNumbers()
-    halfcomplex = True if is_real_dtype(floating_dtype) else False
+    halfcomplex = True if is_real_dtype(dtype) else False
     assert dft.range.grid == reciprocal_grid(dft.domain.grid,
                                              halfcomplex=halfcomplex,
                                              shift=True)
@@ -347,11 +353,11 @@ def test_fourier_trafo_range(exponent, floating_dtype):
     # 3D
     shape = (3, 4, 5)
     space_discr = odl.uniform_discr([0] * 3, [1] * 3, shape, exponent=exponent,
-                                    impl='numpy', dtype=floating_dtype)
+                                    impl='numpy', dtype=dtype)
 
     dft = FourierTransform(space_discr, halfcomplex=True, shift=True)
     assert dft.range.field == odl.ComplexNumbers()
-    halfcomplex = True if is_real_dtype(floating_dtype) else False
+    halfcomplex = True if is_real_dtype(dtype) else False
     assert dft.range.grid == reciprocal_grid(dft.domain.grid,
                                              halfcomplex=halfcomplex,
                                              shift=True)
@@ -370,16 +376,17 @@ def test_fourier_trafo_range(exponent, floating_dtype):
         FourierTransform(dft.domain.partition)
 
 
-def test_fourier_trafo_init_plan(impl, floating_dtype):
+def test_fourier_trafo_init_plan(impl, odl_floating_dtype):
+    dtype = odl_floating_dtype
 
     # Not supported, skip
-    if floating_dtype == np.dtype('float16') and impl == 'pyfftw':
+    if dtype == np.dtype('float16') and impl == 'pyfftw':
         return
 
     shape = 10
-    halfcomplex, _ = _params_from_dtype(floating_dtype)
+    halfcomplex, _ = _params_from_dtype(dtype)
 
-    space_discr = odl.uniform_discr(0, 1, shape, dtype=floating_dtype)
+    space_discr = odl.uniform_discr(0, 1, shape, dtype=dtype)
 
     ft = FourierTransform(space_discr, impl=impl, halfcomplex=halfcomplex)
     if impl != 'pyfftw':
@@ -447,16 +454,17 @@ def test_fourier_trafo_create_temp():
     assert ft._tmp_f is None
 
 
-def test_fourier_trafo_call(impl, floating_dtype):
+def test_fourier_trafo_call(impl, odl_floating_dtype):
     # Test if all variants can be called without error
+    dtype = odl_floating_dtype
 
     # Not supported, skip
-    if floating_dtype == np.dtype('float16') and impl == 'pyfftw':
+    if dtype == np.dtype('float16') and impl == 'pyfftw':
         return
 
     shape = 10
-    halfcomplex, _ = _params_from_dtype(floating_dtype)
-    space_discr = odl.uniform_discr(0, 1, shape, dtype=floating_dtype)
+    halfcomplex, _ = _params_from_dtype(dtype)
+    space_discr = odl.uniform_discr(0, 1, shape, dtype=dtype)
 
     ft = FourierTransform(space_discr, impl=impl, halfcomplex=halfcomplex)
     ift = ft.inverse
@@ -509,8 +517,7 @@ def test_fourier_trafo_scaling():
     def char_interval_ft(x):
         return np.exp(-1j * x / 2) * sinc(x / 2) / np.sqrt(2 * np.pi)
 
-    fspace = odl.FunctionSpace(odl.IntervalProd(-2, 2),
-                               field=odl.ComplexNumbers())
+    fspace = odl.FunctionSpace(odl.IntervalProd(-2, 2), out_dtype=complex)
     discr = odl.uniform_discr_fromspace(fspace, 40, impl='numpy')
     dft = FourierTransform(discr)
 
@@ -641,8 +648,10 @@ def test_fourier_trafo_complex_sum():
     dft = FourierTransform(discr, shift=False)
 
     func = discr.element(hat_func) + 1j * discr.element(char_interval)
-    func_true_ft = (dft.range.element(hat_func_ft) +
-                    1j * dft.range.element(char_interval_ft))
+    func_true_ft = (
+        dft.range.element(hat_func_ft)
+        + 1j * dft.range.element(char_interval_ft)
+    )
     func_dft = dft(func)
     assert (func_dft - func_true_ft).norm() < 0.001
 
@@ -691,9 +700,11 @@ def test_dft_with_known_pairs_2d():
         # 1st comp.: 2 * sinc(y)
         # 2nd comp.: exp(-1j * y * 3/2) * sinc(y/2)
         # Overall factor: (2 * pi)^(-1)
-        return (2 * sinc(x[0]) *
-                np.exp(-1j * x[1] * 3 / 2) * sinc(x[1] / 2) /
-                (2 * np.pi))
+        return (
+            2 * sinc(x[0])
+            * np.exp(-1j * x[1] * 3 / 2) * sinc(x[1] / 2)
+            / (2 * np.pi)
+        )
 
     discr = odl.uniform_discr([-2] * 2, [2] * 2, (100, 400), impl='numpy',
                               dtype='complex64')
@@ -757,9 +768,11 @@ def test_fourier_trafo_completely():
     fft_n = np.fft.fftn(fpre_n, s=discr.shape, axes=[0])
     assert np.allclose(fft_s, [0, -1 + 1j, 2, -1 - 1j])
     assert np.allclose(
-        fft_n, [np.exp(1j * np.pi * (3 - 2 * k) / 4) +
-                np.exp(1j * np.pi * (3 - 2 * k) / 2)
-                for k in range(4)])
+        fft_n,
+        [np.exp(1j * np.pi * (3 - 2 * k) / 4)
+         + np.exp(1j * np.pi * (3 - 2 * k) / 2)
+         for k in range(4)]
+    )
 
     # Interpolation kernel FT
     interp_s = np.sinc(np.linspace(-1 / 2, 1 / 4, 4)) / np.sqrt(2 * np.pi)
@@ -844,5 +857,6 @@ def test_fourier_trafo_completely():
     assert np.allclose(ft_f_s, fhat(recip_s.coord_vectors[0]))
     assert np.allclose(ft_f_n, fhat(recip_n.coord_vectors[0]))
 
+
 if __name__ == '__main__':
-    pytest.main([str(__file__.replace('\\', '/')), '-v'])
+    odl.util.test_file(__file__)

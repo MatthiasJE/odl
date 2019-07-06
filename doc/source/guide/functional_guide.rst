@@ -14,7 +14,7 @@ However, since these functionals are primarily to be used for solving optimizati
  * the vector space :math:`X` is a Hilbert space.
  * the field of scalars :math:`F` are the real numbers.
 
-The first assumption is made in order to simplify the concept of *convex conjugate functional*, see ``convex_conj`` under :ref:`implementation` for more details, or the Wikipedia articles on `convex conjugate`_ and `Legendre transformation`_.
+The first assumption is made in order to simplify the concept of *convex conjugate functional*, see ``convex_conj`` under :ref:`functional_guide__implementation` for more details, or the Wikipedia articles on `convex conjugate`_ and `Legendre transformation`_.
 
 The second assumption is made in order to guarantee that we use a well-ordered set (in contrast to e.g. the complex numbers) over which optimization problems can be meaningfully defined, and that optimal solutions are in fact obtained.
 See, for example, the Wikipedia articles on `field`_, `ordered field`_ and `least-upper-bound property`_.
@@ -27,8 +27,8 @@ It is therefore the users responsibility to ensure that a functional has the pro
 
 The intended use of the `Functional` class is, as mentioned above, to be used when formulating and solving optimization problems.
 One main difference with the `Operator` class is thus that it contains notions specially intended for optimization, such as *convex conjugate functional* and *proximal operator*.
-For more information on these concepts, see ``convex_conj`` and ``proximal`` under :ref:`functional_implementation`.
-There is also a certain type of arithmetics associated with functionals, for more on this see :ref:`functional_arithmetic`.
+For more information on these concepts, see ``convex_conj`` and ``proximal`` under :ref:`functional_guide__implementation`.
+There is also a certain type of arithmetics associated with functionals, for more on this see :ref:`functional_guide__arithmetic`.
 
 
 .. _convex conjugate: https://en.wikipedia.org/wiki/Convex_conjugate
@@ -38,7 +38,8 @@ There is also a certain type of arithmetics associated with functionals, for mor
 .. _ordered field: https://en.wikipedia.org/wiki/Ordered_field
 .. _least-upper-bound property: https://en.wikipedia.org/wiki/Least-upper-bound_property
 
-.. _functional_implementation:
+
+.. _functional_guide__implementation:
 
 Implementation of functionals
 =============================
@@ -51,7 +52,7 @@ To define your own functional, start by writing::
 
         def __init__(self, space):
             # Sets `Operator.domain` to `space` and `Operator.range` to `space.field`
-            odl.solvers.Functional.__init__(self, space)
+            super(MyFunctional, self).__init__(space)
 
         ...
 
@@ -125,7 +126,8 @@ The `Functional` class also contains default implementations of two helper funct
 .. _Legendre transform: https://en.wikipedia.org/wiki/Legendre_transformation
 .. _Fenchel conjugate: https://en.wikipedia.org/wiki/Convex_conjugate
 
-.. _functional_arithmetic:
+
+.. _functional_guide__arithmetic:
 
 Functional arithmetic
 =====================
@@ -189,7 +191,7 @@ All available functional arithmetic, including which properties and methods that
 Code example
 ============
 This section contains an example of an implementation of a functional, namely the functional :math:`\|x\|_2^2 + \langle x, y \rangle`.
-Another example can be found `functional_basic_example.py`, and more implementations of other functionals can be found in `default_functionals.py`.
+Another example can be found in `functional_basic_example.py <https://github.com/odlgroup/odl/blob/master/examples/solvers/functional_basic_example.py>`_, and more implementations of other functionals can be found in `default_functionals.py <https://github.com/odlgroup/odl/blob/master/odl/solvers/functional/default_functionals.py>`_.
 
 .. literalinclude:: code/functional_indepth_example.py
    :language: python

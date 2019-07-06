@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -8,12 +8,7 @@
 
 """(Fast) Iterative shrinkage-thresholding algorithm."""
 
-# Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
-from future import standard_library
-standard_library.install_aliases()
-
-
 import numpy as np
 
 
@@ -21,7 +16,7 @@ __all__ = ('proximal_gradient', 'accelerated_proximal_gradient')
 
 
 def proximal_gradient(x, f, g, gamma, niter, callback=None, **kwargs):
-    """(Accelerated) proximal gradient algorithm for convex optimization.
+    r"""(Accelerated) proximal gradient algorithm for convex optimization.
 
     Also known as "Iterative Soft-Thresholding Algorithm" (ISTA).
     See `[Beck2009]`_ for more information.
@@ -61,24 +56,24 @@ def proximal_gradient(x, f, g, gamma, niter, callback=None, **kwargs):
     The problem of interest is
 
     .. math::
-        \\min_{x \\in X} f(x) + g(x),
+        \min_{x \in X} f(x) + g(x),
 
     where the formal conditions are that
-    :math:`f : X \\to \mathbb{R}` is proper, convex and lower-semicontinuous,
-    and :math:`g : X \\to \mathbb{R}` is differentiable and
-    :math:`\\nabla g` is :math:`1 / \\beta`-Lipschitz continuous.
+    :math:`f : X \to \mathbb{R}` is proper, convex and lower-semicontinuous,
+    and :math:`g : X \to \mathbb{R}` is differentiable and
+    :math:`\nabla g` is :math:`1 / \beta`-Lipschitz continuous.
 
-    Convergence is only guaranteed if the step length :math:`\\gamma` satisfies
-
-    .. math::
-       0 < \\gamma < 2 \\beta
-
-    and the parameter :math:`\\lambda` (``lam``) satisfies
+    Convergence is only guaranteed if the step length :math:`\gamma` satisfies
 
     .. math::
-       \\sum_{k=0}^\\infty \\lambda_k (\\delta - \\lambda_k) = + \\infty
+       0 < \gamma < 2 \beta
 
-    where :math:`\\delta = \\min \{1, \\beta / \\gamma\}`.
+    and the parameter :math:`\lambda` (``lam``) satisfies
+
+    .. math::
+       \sum_{k=0}^\infty \lambda_k (\delta - \lambda_k) = + \infty
+
+    where :math:`\delta = \min \{1, \beta / \gamma\}`.
 
     References
     ----------
@@ -124,7 +119,7 @@ def proximal_gradient(x, f, g, gamma, niter, callback=None, **kwargs):
 
 def accelerated_proximal_gradient(x, f, g, gamma, niter, callback=None,
                                   **kwargs):
-    """Accelerated proximal gradient algorithm for convex optimization.
+    r"""Accelerated proximal gradient algorithm for convex optimization.
 
     The method is known as "Fast Iterative Soft-Thresholding Algorithm"
     (FISTA). See `[Beck2009]`_ for more information.
@@ -157,17 +152,17 @@ def accelerated_proximal_gradient(x, f, g, gamma, niter, callback=None,
     The problem of interest is
 
     .. math::
-        \\min_{x \\in X} f(x) + g(x),
+        \min_{x \in X} f(x) + g(x),
 
     where the formal conditions are that
-    :math:`f : X \\to \mathbb{R}` is proper, convex and lower-semicontinuous,
-    and :math:`g : X \\to \mathbb{R}` is differentiable and
-    :math:`\\nabla g` is :math:`1 / \\beta`-Lipschitz continuous.
+    :math:`f : X \to \mathbb{R}` is proper, convex and lower-semicontinuous,
+    and :math:`g : X \to \mathbb{R}` is differentiable and
+    :math:`\nabla g` is :math:`1 / \beta`-Lipschitz continuous.
 
-    Convergence is only guaranteed if the step length :math:`\\gamma` satisfies
+    Convergence is only guaranteed if the step length :math:`\gamma` satisfies
 
     .. math::
-       0 < \\gamma < 2 \\beta.
+       0 < \gamma < 2 \beta.
 
     References
     ----------
@@ -219,6 +214,5 @@ def accelerated_proximal_gradient(x, f, g, gamma, niter, callback=None,
 
 
 if __name__ == '__main__':
-    # pylint: disable=wrong-import-position
     from odl.util.testutils import run_doctests
     run_doctests()

@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -9,29 +9,28 @@
 """Test ASTRA back-end using CUDA."""
 
 from __future__ import division
+
 import numpy as np
 import pytest
 
 import odl
 from odl.tomo.backends.astra_cuda import (
-    AstraCudaProjectorImpl, AstraCudaBackProjectorImpl)
+    AstraCudaBackProjectorImpl, AstraCudaProjectorImpl)
 from odl.tomo.util.testutils import skip_if_no_astra_cuda
-from odl.util.testutils import simple_fixture
-
-# TODO: test with CUDA implemented uniform_discr
 
 
 # --- pytest fixtures --- #
 
+
 # Find the valid projectors
-projectors = [skip_if_no_astra_cuda('par2d'),
-              skip_if_no_astra_cuda('cone2d'),
-              skip_if_no_astra_cuda('par3d'),
-              skip_if_no_astra_cuda('cone3d'),
-              skip_if_no_astra_cuda('helical')]
+projectors = [
+    pytest.param(value, marks=skip_if_no_astra_cuda)
+    for value in ['par2d', 'cone2d', 'par3d', 'cone3d', 'helical']
+]
 
-
-space_and_geometry_ids = ['geom = {}'.format(p.args[1]) for p in projectors]
+space_and_geometry_ids = [
+    " geom='{}' ".format(p.values[0]) for p in projectors
+]
 
 
 @pytest.fixture(scope="module", params=projectors, ids=space_and_geometry_ids)
@@ -55,15 +54,15 @@ def space_and_geometry(request):
         reco_space = odl.uniform_discr([-4, -5], [4, 5], (4, 5),
                                        dtype=dtype)
         dpart = odl.uniform_partition(-6, 6, 6)
-        geom = odl.tomo.FanFlatGeometry(apart, dpart, src_radius=100,
+        geom = odl.tomo.FanBeamGeometry(apart, dpart, src_radius=100,
                                         det_radius=10)
     elif geom == 'cone3d':
         reco_space = odl.uniform_discr([-4, -5, -6], [4, 5, 6], (4, 5, 6),
                                        dtype=dtype)
         dpart = odl.uniform_partition([-7, -8], [7, 8], (7, 8))
 
-        geom = odl.tomo.CircularConeFlatGeometry(apart, dpart, src_radius=200,
-                                                 det_radius=100)
+        geom = odl.tomo.ConeBeamGeometry(apart, dpart,
+                                         src_radius=200, det_radius=100)
     elif geom == 'helical':
         reco_space = odl.uniform_discr([-4, -5, -6], [4, 5, 6], (4, 5, 6),
                                        dtype=dtype)
@@ -71,8 +70,8 @@ def space_and_geometry(request):
         # overwrite angle
         apart = odl.uniform_partition(0, 2 * 2 * np.pi, 18)
         dpart = odl.uniform_partition([-7, -8], [7, 8], (7, 8))
-        geom = odl.tomo.HelicalConeFlatGeometry(apart, dpart, pitch=1.0,
-                                                src_radius=200, det_radius=100)
+        geom = odl.tomo.ConeBeamGeometry(apart, dpart, pitch=1.0,
+                                         src_radius=200, det_radius=100)
     else:
         raise ValueError('geom not valid')
 
@@ -109,4 +108,4 @@ def test_astra_cuda_projector(space_and_geometry):
 
 
 if __name__ == '__main__':
-    pytest.main([str(__file__.replace('\\', '/')), '-v'])
+    odl.util.test_file(__file__)

@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -8,11 +8,7 @@
 
 """Nonlinear version of the conjugate gradient method."""
 
-# Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
-from future import standard_library
-standard_library.install_aliases()
-
 
 from odl.solvers.util import ConstantLineSearch
 
@@ -23,7 +19,7 @@ __all__ = ('conjugate_gradient_nonlinear',)
 def conjugate_gradient_nonlinear(f, x, line_search=1.0, maxiter=1000, nreset=0,
                                  tol=1e-16, beta_method='FR',
                                  callback=None):
-    """Conjugate gradient for nonlinear problems.
+    r"""Conjugate gradient for nonlinear problems.
 
     Parameters
     ----------
@@ -45,10 +41,11 @@ def conjugate_gradient_nonlinear(f, x, line_search=1.0, maxiter=1000, nreset=0,
     beta_method : {'FR', 'PR', 'HS', 'DY'}, optional
         Method to calculate ``beta`` in the iterates.
 
-        * ``'FR'`` : Fletcher-Reeves
-        * ``'PR'`` : Polak-Ribiere
-        * ``'HS'`` : Hestenes-Stiefel
-        * ``'DY'`` : Dai-Yuan
+        - ``'FR'`` : Fletcher-Reeves
+        - ``'PR'`` : Polak-Ribiere
+        - ``'HS'`` : Hestenes-Stiefel
+        - ``'DY'`` : Dai-Yuan
+
     callback : callable, optional
         Object executing code per iteration, e.g. plotting each iterate.
 
@@ -61,11 +58,11 @@ def conjugate_gradient_nonlinear(f, x, line_search=1.0, maxiter=1000, nreset=0,
         \min f(x)
 
     for a differentiable functional
-    :math:`f: \mathcal{X}\\to \mathbb{R}` on a Hilbert space
+    :math:`f: \mathcal{X}\to \mathbb{R}` on a Hilbert space
     :math:`\mathcal{X}`. It does so by finding a zero of the gradient
 
     .. math::
-        \\nabla f: \mathcal{X} \\to \mathcal{X}.
+        \nabla f: \mathcal{X} \to \mathcal{X}.
 
     The method is described in a
     `Wikipedia article
@@ -73,11 +70,13 @@ def conjugate_gradient_nonlinear(f, x, line_search=1.0, maxiter=1000, nreset=0,
 
     See Also
     --------
-    bfgs_method : Quasi-newton solver for the same problem
-    conjugate_gradient : Optimized solver for least-squares problem with linear
-    and symmetric operator
-    conjugate_gradient_normal : Equivalent solver but for least-squares problem
-    with linear operator
+    odl.solvers.smooth.newton.bfgs_method :
+        Quasi-Newton solver for the same problem
+    odl.solvers.iterative.iterative.conjugate_gradient :
+        Optimized solver for least-squares problem with linear and symmetric
+        operator
+    odl.solvers.iterative.iterative.conjugate_gradient_normal :
+        Equivalent solver but for least-squares problem with linear operator
     """
     if x not in f.domain:
         raise TypeError('`x` {!r} is not in the domain of `f` {!r}'

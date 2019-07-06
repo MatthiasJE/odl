@@ -24,8 +24,8 @@ space = odl.uniform_discr([0, 0], [n, m], [n, m])
 data = space.element(image)
 noise = odl.phantom.white_noise(space) * 10.0
 noisy_data = data + noise
-data.show('Original data')
-noisy_data.show('Noisy data')
+data.show('Original Data')
+noisy_data.show('Noisy Nata')
 
 # Gradient for TV regularization
 gradient = odl.Gradient(space)
@@ -54,3 +54,5 @@ callback = (odl.solvers.CallbackShow(step=20, clim=[0, 255]) &
 # Call the solver. x is updated in-place with the consecutive iterates.
 odl.solvers.forward_backward_pd(x, f, g, lin_ops, h, tau=1.0,
                                 sigma=[0.01], niter=1000, callback=callback)
+
+x.show(title='Reconstruction', force_show=True)

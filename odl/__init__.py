@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2018 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -14,37 +14,69 @@ restricted to) inverse problems.
 
 from __future__ import absolute_import
 
-__version__ = '0.6.1.dev0'
-__all__ = ('diagnostics', 'discr', 'operator', 'set', 'space', 'solvers',
-           'tomo', 'trafos', 'util', 'phantom', 'deform', 'ufunc_ops',
-           'datasets', 'contrib')
+from os import pardir, path
 
-# Propagate names defined in __all__ of all submodules into the top-level
-# module
+import numpy as np
+
+__all__ = (
+    'set',
+    'space',
+    'operator',
+    'discr',
+    'contrib',
+    'deform',
+    'diagnostics',
+    'phantom',
+    'solvers',
+    'tomo',
+    'trafos',
+    'ufunc_ops',
+    'util',
+)
+
+# Set package version
+curdir = path.abspath(path.dirname(__file__))
+
+with open(path.join(curdir, 'VERSION')) as version_file:
+    __version__ = version_file.read().strip()
+
+# Set old Numpy printing behavior as to not invalidate all doctests.
+# TODO(kohr-h): switch to new behavior when Numpy 1.14 is minimum
+try:
+    np.set_printoptions(legacy='1.13')
+except TypeError:
+    pass
+
+# Set printing linewidth to 71 to allow method docstrings to not extend
+# beyond 79 characters (2 times indent of 4)
+np.set_printoptions(linewidth=71)
+
+# Propagate names defined in` __all__` of all "core" subpackages into
+# the top-level namespace
 from .set import *
 __all__ += set.__all__
-
-# operator must come before space because npy_ntuples imports Operator
-from .operator import *
-__all__ += operator.__all__
 
 from .space import *
 __all__ += space.__all__
 
+from .operator import *
+__all__ += operator.__all__
+
 from .discr import *
 __all__ += discr.__all__
 
-from . import diagnostics
-from . import solvers
-from . import trafos
-from . import tomo
-from . import util
-from . import phantom
-from . import deform
-from . import ufunc_ops
-from . import datasets
+# More "advanced" subpackages keep their namespaces separate from top-level,
+# we only import the modules themselves
 from . import contrib
+from . import deform
+from . import diagnostics
+from . import phantom
+from . import solvers
+from . import tomo
+from . import trafos
+from . import ufunc_ops
+from . import util
 
-
+# Add `test` function to global namespace so users can run `odl.test()`
 from .util import test
 __all__ += ('test',)

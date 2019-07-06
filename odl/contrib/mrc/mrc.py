@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -8,12 +8,8 @@
 
 """Specification and reader for the MRC2014 file format."""
 
-# Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
-from future import standard_library
-standard_library.install_aliases()
-from builtins import int, super
-
+from builtins import int, object
 from collections import OrderedDict
 from itertools import permutations
 import numpy as np
@@ -126,6 +122,7 @@ def print_mrc2014_spec():
     """
     print(MRC_2014_SPEC_TABLE)
 
+
 print_mrc2014_spec.__doc__ += MRC_2014_SPEC_TABLE
 
 
@@ -196,6 +193,7 @@ def print_fei_ext_header_spec():
     The specification table is as follows:
     """
     print(MRC_FEI_EXT_HEADER_SECTION)
+
 
 print_fei_ext_header_spec.__doc__ += MRC_FEI_EXT_HEADER_SECTION
 
@@ -431,7 +429,7 @@ class FileReaderMRC(MRCHeaderProperties, FileReaderRawBinaryWithHeader):
     """Reader for the MRC file format.
 
     By default, the MRC2014 format is used, see `print_mrc_2014_spec` for
-    details. See also [Che+2015]_ or the `explanations on the CCP4 homepage
+    details. See also [Che+2015] or the `explanations on the CCP4 homepage
     <http://www.ccpem.ac.uk/mrc_format/mrc2014.php>`_ for the
     text of the specification.
 
@@ -472,7 +470,9 @@ class FileReaderMRC(MRCHeaderProperties, FileReaderRawBinaryWithHeader):
                 keys=MRC_SPEC_KEYS,
                 dtype_map=MRC_DTYPE_TO_NPY_DTYPE)
 
-        super().__init__(file, header_fields)
+        # `MRCHeaderProperties` has no `__init__`, so this calls
+        # `FileReaderRawBinaryWithHeader.__init__`
+        super(FileReaderMRC, self).__init__(file, header_fields)
 
     def read_extended_header(self, groupby='field', force_type=''):
         """Read the extended header according to `extended_header_type`.
@@ -612,8 +612,8 @@ extended-mrc-format-not-used-by-2dx
         data : `numpy.ndarray`
             The data read from `file`.
         """
-        data = super().read_data(dstart, dend).reshape(self.data_shape,
-                                                       order='F')
+        data = super(FileReaderMRC, self).read_data(dstart, dend)
+        data = data.reshape(self.data_shape, order='F')
         if swap_axes:
             data = np.transpose(data, axes=self.data_axis_order)
             assert data.shape == self.data_shape
@@ -624,7 +624,7 @@ class FileWriterMRC(MRCHeaderProperties, FileWriterRawBinaryWithHeader):
 
     """Writer for the MRC file format.
 
-    See [Che+2015]_ or the `explanations on the CCP4 homepage
+    See [Che+2015] or the `explanations on the CCP4 homepage
     <http://www.ccpem.ac.uk/mrc_format/mrc2014.php>`_ for the
     text of the specification.
 
@@ -712,13 +712,13 @@ def mrc_header_from_params(shape, dtype, kind, **kwargs):
     dmin, dmax : float, optional
         Minimum and maximum values of the data, used for header entries
         ``'dmin'`` and ``'dmax'``, resp.
-        Default: 1.0, 0.0. These values indicate according to [Che+2015]_
+        Default: 1.0, 0.0. These values indicate according to [Che+2015]
         that the values are considered as undetermined.
     dmean, rms : float, optional
         Mean and variance of the data, used for header entries ``'dmean'``
         and ``'rms'``, resp.
         Default: ``min(dmin, dmax) - 1, -1.0``. These values indicate
-        according to [Che+2015]_ that the values are considered as
+        according to [Che+2015] that the values are considered as
         undetermined.
     mrc_version : 2-tuple of int, optional
         Version identifier for the MRC file, used for the ``'nversion'``

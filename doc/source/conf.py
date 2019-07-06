@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2018 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -6,12 +6,13 @@
 # v. 2.0. If a copy of the MPL was not distributed with this file, You can
 # obtain one at https://mozilla.org/MPL/2.0/.
 
-from distutils.version import StrictVersion
+from __future__ import print_function
 import sphinx
 import glob
 import os
 import sphinx_rtd_theme
 import sys
+from packaging.version import parse as parse_version
 
 # --- General configuration --- #
 
@@ -22,13 +23,13 @@ try:
     # Verify that we can import odl
     import odl
 except Exception as e:
-    print('Failed importing odl, exiting')
-    print(e)
+    print('Failed importing odl, exiting', file=sys.stderr)
+    print(e, file=sys.stderr)
     sys.exit(1)
 
 
 # Add numpydoc folder
-sys.path.insert(0, os.path.abspath('../sphinxext'))
+sys.path.insert(0, os.path.abspath('../numpydoc'))
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -42,7 +43,7 @@ extensions = [
     'numpydoc'
 ]
 # Use newer 'imgmath' extension if possible
-if StrictVersion(sphinx.__version__) >= '1.4':
+if parse_version(sphinx.__version__) >= parse_version('1.4'):
     extensions.append('sphinx.ext.imgmath')
 else:
     extensions.append('sphinx.ext.pngmath')
@@ -60,9 +61,10 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'numpy': ('https://docs.scipy.org/doc/numpy/', None),
     'scipy': ('https://docs.scipy.org/doc/scipy/reference/', None),
-    'matplotlib': ('http://matplotlib.org/', None),
-    'pywt': ('http://www.pybytes.com/pywavelets/', None),
-    'pyfftw': ('https://hgomersall.github.io/pyFFTW/', None)}
+    'matplotlib': ('https://matplotlib.org/', None),
+    'pywt': ('https://pywavelets.readthedocs.io/en/latest/', None),
+    'pyfftw': ('https://pyfftw.readthedocs.io/en/latest/', None),
+    'pytest': ('https://docs.pytest.org/en/latest/', None)}
 
 
 # Stop autodoc from skipping __init__
@@ -85,6 +87,7 @@ def skip(app, what, name, obj, skip, options):
 
 def setup(app):
     app.connect("autodoc-skip-member", skip)
+
 
 # Autosummary
 autosummary_generate = glob.glob("./*.rst")

@@ -19,14 +19,14 @@ reco_space = odl.uniform_discr(
 # Make a parallel beam geometry with flat detector
 # Angles: uniformly spaced, n = 360, min = 0, max = pi
 angle_partition = odl.uniform_partition(0, np.pi, 180)
-# Detector: uniformly sampled, n = (558, 558), min = (-40, -40), max = (40, 40)
-detector_partition = odl.uniform_partition([-40, -40], [40, 40], [558, 558])
+# Detector: uniformly sampled, n = (512, 512), min = (-40, -40), max = (40, 40)
+detector_partition = odl.uniform_partition([-40, -40], [40, 40], [512, 512])
 # Geometry with tilted axis.
 geometry = odl.tomo.Parallel3dAxisGeometry(
     angle_partition, detector_partition, axis=[1, 1, 1])
 
 
-# --- Create Filtered Back-Projection (FBP) operator --- #
+# --- Create Filtered Back-projection (FBP) operator --- #
 
 
 # Ray transform (= forward projection).
@@ -52,6 +52,6 @@ fbp_reconstruction = fbp(proj_data)
 
 # Show a slice of phantom, projections, and reconstruction
 phantom.show(title='Phantom')
-proj_data.show(title='Simulated data (sinogram)')
-fbp_reconstruction.show(title='Filtered back-projection')
-(phantom - fbp_reconstruction).show(title='Error')
+proj_data.show(title='Simulated Data (Sinogram)')
+fbp_reconstruction.show(title='Filtered Back-projection')
+(phantom - fbp_reconstruction).show(title='Error', force_show=True)

@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -7,11 +7,12 @@
 # obtain one at https://mozilla.org/MPL/2.0/.
 
 from __future__ import division
+
 import pytest
 
 import odl
-from odl.util.testutils import (all_almost_equal, noise_element,
-                                skip_if_no_pywavelets, simple_fixture)
+from odl.util.testutils import (
+    all_almost_equal, noise_element, simple_fixture, skip_if_no_pywavelets)
 
 
 # --- pytest fixtures --- #
@@ -21,7 +22,11 @@ wavelet = simple_fixture('wavelet', ['db1', 'sym2'])
 pad_mode = simple_fixture('pad_mode', ['constant', 'pywt_periodic'])
 ndim = simple_fixture('ndim', [1, 2, 3])
 nlevels = simple_fixture('nlevels', [2, None])
-wave_impl = simple_fixture('wave_impl', [skip_if_no_pywavelets('pywt')])
+axes = simple_fixture('axes', [-1, None])
+wave_impl = simple_fixture(
+    'wave_impl',
+    [pytest.param('pywt', marks=skip_if_no_pywavelets)]
+)
 
 
 @pytest.fixture(scope='module')
@@ -71,30 +76,31 @@ def shape_setup(ndim, nlevels, wavelet, pad_mode):
     return wavelet, pad_mode, nlevels, image_shape, coeff_shapes
 
 
-def test_wavelet_transform(wave_impl, shape_setup, floating_dtype):
+def test_wavelet_transform(wave_impl, shape_setup, odl_floating_dtype, axes):
     # Verify that the operator works as expected
+    dtype = odl_floating_dtype
     wavelet, pad_mode, nlevels, shape, _ = shape_setup
     ndim = len(shape)
 
-    space = odl.uniform_discr([-1] * ndim, [1] * ndim, shape,
-                              dtype=floating_dtype)
+    space = odl.uniform_discr([-1] * ndim, [1] * ndim, shape, dtype=dtype)
     image = noise_element(space)
 
     # TODO: check more error scenarios
     if wave_impl == 'pywt' and pad_mode == 'constant':
         with pytest.raises(ValueError):
             wave_trafo = odl.trafos.WaveletTransform(
-                space, wavelet, nlevels, pad_mode, pad_const=1, impl=wave_impl)
+                space, wavelet, nlevels, pad_mode, pad_const=1, impl=wave_impl,
+                axes=axes)
 
     wave_trafo = odl.trafos.WaveletTransform(
-        space, wavelet, nlevels, pad_mode, impl=wave_impl)
+        space, wavelet, nlevels, pad_mode, impl=wave_impl, axes=axes)
 
-    assert wave_trafo.domain.dtype == floating_dtype
-    assert wave_trafo.range.dtype == floating_dtype
+    assert wave_trafo.domain.dtype == dtype
+    assert wave_trafo.range.dtype == dtype
 
     wave_trafo_inv = wave_trafo.inverse
-    assert wave_trafo_inv.domain.dtype == floating_dtype
-    assert wave_trafo_inv.range.dtype == floating_dtype
+    assert wave_trafo_inv.domain.dtype == dtype
+    assert wave_trafo_inv.range.dtype == dtype
     assert wave_trafo_inv.nlevels == wave_trafo.nlevels
     assert wave_trafo_inv.wavelet == wave_trafo.wavelet
     assert wave_trafo_inv.pad_mode == wave_trafo.pad_mode
@@ -108,4 +114,4 @@ def test_wavelet_transform(wave_impl, shape_setup, floating_dtype):
 
 
 if __name__ == '__main__':
-    pytest.main([str(__file__.replace('\\', '/')), '-v'])
+    odl.util.test_file(__file__)

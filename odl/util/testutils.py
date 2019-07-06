@@ -1,4 +1,4 @@
-﻿# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -6,56 +6,77 @@
 # v. 2.0. If a copy of the MPL was not distributed with this file, You can
 # obtain one at https://mozilla.org/MPL/2.0/.
 
-"""Utilities for internal use."""
+"""Testing utilities."""
 
-# Imports for common Python 2/3 codebase
-from __future__ import print_function, division, absolute_import
-from future import standard_library
-standard_library.install_aliases()
-from builtins import int, object
+from __future__ import absolute_import, division, print_function
+from future.moves.itertools import zip_longest
 
-from itertools import zip_longest
-import numpy as np
-import sys
+from contextlib import contextmanager
 import os
+import sys
 import warnings
+from builtins import object
 from time import time
-from pkg_resources import parse_version
-from odl.util.utility import run_from_ipython
+
+import numpy as np
+
+from odl.util.utility import is_string, run_from_ipython
 
 
-__all__ = ('almost_equal', 'all_equal', 'all_almost_equal', 'never_skip',
-           'skip_if_no_stir', 'skip_if_no_pywavelets',
-           'skip_if_no_pyfftw', 'skip_if_no_largescale',
-           'noise_array', 'noise_element', 'noise_elements',
-           'Timer', 'timeit', 'ProgressBar', 'ProgressRange',
-           'test', 'run_doctests')
+__all__ = (
+    'dtype_ndigits',
+    'dtype_tol',
+    'all_equal',
+    'all_almost_equal',
+    'is_subdict',
+    'skip_if_no_pyfftw',
+    'skip_if_no_pywavelets',
+    'skip_if_no_largescale',
+    'skip_if_no_benchmark',
+    'simple_fixture',
+    'noise_array',
+    'noise_element',
+    'noise_elements',
+    'fail_counter',
+    'timer',
+    'timeit',
+    'ProgressBar',
+    'ProgressRange',
+    'test',
+    'run_doctests',
+    'test_file',
+)
 
 
-def _places(a, b, default=None):
-    """Return number of expected correct digits between ``a`` and ``b``.
+def _ndigits(a, b, default=None):
+    """Return number of expected correct digits comparing ``a`` and ``b``.
 
-    Returned numbers if one of ``a.dtype`` and ``b.dtype`` is as below:
-        2 -- for ``np.float16``
+    The returned number is the minimum `dtype_ndigits` of the two objects.
 
-        3 -- for ``np.float32`` or ``np.complex64``
-
-        5 -- for all other cases
+    See Also
+    --------
+    dtype_ndigits
     """
     dtype1 = getattr(a, 'dtype', object)
     dtype2 = getattr(b, 'dtype', object)
-    return min(dtype_places(dtype1, default), dtype_places(dtype2, default))
+    return min(dtype_ndigits(dtype1, default), dtype_ndigits(dtype2, default))
 
 
-def dtype_places(dtype, default=None):
-    """Return number of correct digits expected for given dtype.
+def dtype_ndigits(dtype, default=None):
+    """Return the number of correct digits expected for a given dtype.
+
+    This is intended as a somewhat generous default (relative) precision for
+    results of more or less stable computations.
 
     Returned numbers:
-        1 -- for ``np.float16``
 
-        3 -- for ``np.float32`` or ``np.complex64``
+    - ``np.float16``: ``1``
+    - ``np.float32`` or ``np.complex64``: ``3``
+    - Others: ``default`` if given, otherwise ``5``
 
-        5 -- for all other cases
+    See Also
+    --------
+    dtype_tol : Same precision expressed as tolerance
     """
     small_dtypes = [np.float32, np.complex64]
     tiny_dtypes = [np.float16]
@@ -68,32 +89,23 @@ def dtype_places(dtype, default=None):
         return default if default is not None else 5
 
 
-def almost_equal(a, b, places=None):
-    """Return ``True`` if the scalars ``a`` and ``b`` are almost equal."""
-    if a is None and b is None:
-        return True
+def dtype_tol(dtype, default=None):
+    """Return a tolerance for a given dtype.
 
-    if places is None:
-        places = _places(a, b)
+    This is intended as a somewhat generous default (relative) tolerance for
+    results of more or less stable computations.
 
-    eps = 10 ** -places
+    Returned numbers:
 
-    try:
-        complex(a)
-        complex(b)
-    except TypeError:
-        return False
+    - ``np.float16``: ``1e-1``
+    - ``np.float32`` or ``np.complex64``: ``1e-3``
+    - Others: ``default`` if given, otherwise ``1e-5``
 
-    if np.isnan(a) and np.isnan(b):
-        return True
-
-    if np.isinf(a) and np.isinf(b):
-        return a == b
-
-    if abs(complex(b)) < eps:
-        return abs(complex(a) - complex(b)) < eps
-    else:
-        return abs(a / b - 1) < eps
+    See Also
+    --------
+    dtype_ndigits : Same tolerance expressed in number of digits.
+    """
+    return 10 ** -dtype_ndigits(dtype, default)
 
 
 def all_equal(iter1, iter2):
@@ -136,24 +148,13 @@ def all_equal(iter1, iter2):
     return True
 
 
-def all_almost_equal_array(v1, v2, places):
-    # Ravel if has order, only DiscreteLpElement has an order
-    if hasattr(v1, 'order'):
-        v1 = v1.__array__().ravel(v1.order)
-    else:
-        v1 = v1.__array__()
-
-    if hasattr(v2, 'order'):
-        v2 = v2.__array__().ravel(v2.order)
-    else:
-        v2 = v2.__array__()
-
-    return np.all(np.isclose(v1, v2,
-                             rtol=10 ** (-places), atol=10 ** (-places),
-                             equal_nan=True))
+def all_almost_equal_array(v1, v2, ndigits):
+    return np.allclose(v1, v2,
+                       rtol=10 ** -ndigits, atol=10 ** -ndigits,
+                       equal_nan=True)
 
 
-def all_almost_equal(iter1, iter2, places=None):
+def all_almost_equal(iter1, iter2, ndigits=None):
     """Return ``True`` if all elements in ``a`` and ``b`` are almost equal."""
     try:
         if iter1 is iter2 or iter1 == iter2:
@@ -164,17 +165,22 @@ def all_almost_equal(iter1, iter2, places=None):
     if iter1 is None and iter2 is None:
         return True
 
-    if places is None:
-        places = _places(iter1, iter2, None)
-
     if hasattr(iter1, '__array__') and hasattr(iter2, '__array__'):
-        return all_almost_equal_array(iter1, iter2, places)
+        # Only get default ndigits if comparing arrays, need to keep `None`
+        # otherwise for recursive calls.
+        if ndigits is None:
+            ndigits = _ndigits(iter1, iter2, None)
+        return all_almost_equal_array(iter1, iter2, ndigits)
 
     try:
         it1 = iter(iter1)
         it2 = iter(iter2)
     except TypeError:
-        return almost_equal(iter1, iter2, places)
+        if ndigits is None:
+            ndigits = _ndigits(iter1, iter2, None)
+        return np.isclose(iter1, iter2,
+                          atol=10 ** -ndigits, rtol=10 ** -ndigits,
+                          equal_nan=True)
 
     diff_length_sentinel = object()
     for [ip1, ip2] in zip_longest(it1, it2,
@@ -184,7 +190,7 @@ def all_almost_equal(iter1, iter2, places=None):
         if ip1 is diff_length_sentinel or ip2 is diff_length_sentinel:
             return False
 
-        if not all_almost_equal(ip1, ip2, places):
+        if not all_almost_equal(ip1, ip2, ndigits):
             return False
 
     return True
@@ -199,83 +205,94 @@ try:
     # Try catch in case user does not have pytest
     import pytest
 
-    # Used in lists where the elements should all be skipifs
-    never_skip = pytest.mark.skipif(
-        "False",
-        reason='Fill in, never skips'
-    )
+except ImportError:
 
-    skip_if_no_stir = pytest.mark.skipif(
-        "not odl.tomo.backends.stir_bindings.STIR_AVAILABLE",
-        reason='STIR not available'
-    )
+    def identity(*args, **kwargs):
+        if args and callable(args[0]):
+            return args[0]
+        else:
+            return identity
 
-    skip_if_no_pywavelets = pytest.mark.skipif(
-        "not odl.trafos.PYWT_AVAILABLE",
-        reason='PyWavelets not available'
-    )
+    skip_if_no_pyfftw = identity
+    skip_if_no_pywavelets = identity
+    skip_if_no_largescale = identity
+    skip_if_no_benchmark = identity
 
+else:
+    # Mark decorators for test parameters
     skip_if_no_pyfftw = pytest.mark.skipif(
-        "not odl.trafos.PYFFTW_AVAILABLE",
-        reason='pyFFTW not available')
-
+        'not odl.trafos.PYFFTW_AVAILABLE',
+        reason='pyFFTW not available',
+    )
+    skip_if_no_pywavelets = pytest.mark.skipif(
+        'not odl.trafos.PYWT_AVAILABLE',
+        reason='PyWavelets not available',
+    )
     skip_if_no_largescale = pytest.mark.skipif(
         "not pytest.config.getoption('--largescale')",
-        reason='Need --largescale option to run'
+        reason='--largescale option not given',
     )
-
     skip_if_no_benchmark = pytest.mark.skipif(
         "not pytest.config.getoption('--benchmark')",
-        reason='Need --benchmark option to run'
+        reason='--benchmark option not given',
     )
 
-    def simple_fixture(name, params, fmt=None):
-        """Helper to create a pytest fixture using only name and params.
 
-        Parameters
-        ----------
-        name : str
-            Name of the parameters used for the ``ids`` argument
-            to `pytest.fixture`.
-        params : sequence
-            Values to be taken as parameters in the fixture. They are
-            used as ``params`` argument to `pytest.fixture`.
-        fmt : str, optional
-            Use this format string for the generation of the ``ids``.
-            For each value, the id string is generated as::
+def simple_fixture(name, params, fmt=None):
+    """Helper to create a pytest fixture using only name and params.
 
-                fmt.format(name=name, value=value)
+    Parameters
+    ----------
+    name : str
+        Name of the parameters used for the ``ids`` argument
+        to `pytest.fixture`.
+    params : sequence
+        Values to be taken as parameters in the fixture. They are
+        used as ``params`` argument to `_pytest.fixtures.fixture`.
+        Arguments wrapped in a ``pytest.skipif`` decorator are
+        unwrapped for the generation of the test IDs.
+    fmt : str, optional
+        Use this format string for the generation of the ``ids``.
+        For each value, the id string is generated as ::
 
-            hence the format string must use ``{name}`` and ``{value}``.
+            fmt.format(name=name, value=value)
 
-            Default: ``" {name} = '{value}' "`` for string parameters,
-            otherwise ``" {name} = {value} "``
-        """
-        if fmt is None:
-            try:
-                params[0] + ''
-            except TypeError:
-                # Not a string type
-                fmt = " {name} = {value} "
+        hence the format string must use ``{name}`` and ``{value}``.
+        Default format strings are:
+
+            - ``" {name}='{value}' "`` for string parameters,
+            - ``" {name}={value} "`` for other types.
+    """
+    import _pytest
+
+    if fmt is None:
+        # Use some intelligence to make good format strings
+        fmt_str = " {name}='{value}' "
+        fmt_default = " {name}={value} "
+
+        ids = []
+        for p in params:
+            # TODO: other types of decorators?
+            if (
+                isinstance(p, _pytest.mark.MarkDecorator)
+                and p.name == 'skipif'
+            ):
+                # Unwrap the wrapped object in the decorator
+                if is_string(p.args[1]):
+                    ids.append(fmt_str.format(name=name, value=p.args[1]))
+                else:
+                    ids.append(fmt_default.format(name=name, value=p.args[1]))
             else:
-                # String type
-                fmt = " {name} = '{value}' "
+                if is_string(p):
+                    ids.append(fmt_str.format(name=name, value=p))
+                else:
+                    ids.append(fmt_default.format(name=name, value=p))
+    else:
+        # Use provided `fmt` for everything
+        ids = [fmt.format(name=name, value=p) for p in params]
 
-        ids = [fmt.format(name=name, value=value) for value in params]
-        wrapper = pytest.fixture(scope='module', ids=ids, params=params)
-        return wrapper(lambda request: request.param)
-
-except ImportError:
-    def _pass(function):
-        """Trivial decorator used if pytest marks are not available."""
-        return function
-
-    never_skip = _pass
-    skip_if_no_stir = _pass
-    skip_if_no_pywavelets = _pass
-    skip_if_no_pyfftw = _pass
-    skip_if_no_largescale = _pass
-    skip_if_no_benchmark = _pass
+    wrapper = pytest.fixture(scope='module', ids=ids, params=params)
+    return wrapper(lambda request: request.param)
 
 
 # Helpers to generate data
@@ -322,14 +339,22 @@ def noise_array(space):
     if isinstance(space, ProductSpace):
         return np.array([noise_array(si) for si in space])
     else:
-        # Generate numpy space elements, real or complex or int
-        if np.issubdtype(space.dtype, np.floating):
-            arr = np.random.randn(space.size)
-        elif np.issubdtype(space.dtype, np.integer):
-            arr = np.random.randint(-10, 10, space.size)
+        if space.dtype == bool:
+            # TODO(kohr-h): use `randint(..., dtype=bool)` from Numpy 1.11 on
+            arr = np.random.randint(0, 2, size=space.shape).astype(bool)
+        elif np.issubdtype(space.dtype, np.unsignedinteger):
+            arr = np.random.randint(0, 10, space.shape)
+        elif np.issubdtype(space.dtype, np.signedinteger):
+            arr = np.random.randint(-10, 10, space.shape)
+        elif np.issubdtype(space.dtype, np.floating):
+            arr = np.random.randn(*space.shape)
+        elif np.issubdtype(space.dtype, np.complexfloating):
+            arr = (
+                np.random.randn(*space.shape)
+                + 1j * np.random.randn(*space.shape)
+            ) / np.sqrt(2.0)
         else:
-            arr = (np.random.randn(space.size) +
-                   1j * np.random.randn(space.size)) / np.sqrt(2.0)
+            raise ValueError('bad dtype {}'.format(space.dtype))
 
         return arr.astype(space.dtype, copy=False)
 
@@ -435,80 +460,72 @@ def noise_elements(space, n=1):
         return arrs, elems
 
 
-class FailCounter(object):
-
-    """Used to count the number of failures of something
+@contextmanager
+def fail_counter(test_name, err_msg=None, logger=print):
+    """Used to count the number of failures of something.
 
     Usage::
 
-        with FailCounter() as counter:
+        with fail_counter("my_test") as counter:
             # Do stuff
 
             counter.fail()
 
-    When done, it prints
+    When done, it prints ::
 
-    ``*** FAILED 1 TEST CASE(S) ***``
+        my_test
+        *** FAILED 1 TEST CASE(S) ***
     """
 
-    def __init__(self, test_name, err_msg=None, logger=print):
-        self.num_failed = 0
-        self.test_name = test_name
-        self.err_msg = err_msg
-        self.fail_strings = []
-        self.log = logger
+    class _FailCounter(object):
 
-    def __enter__(self):
-        return self
+        def __init__(self):
+            self.num_failed = 0
+            self.fail_strings = []
 
-    def fail(self, string=None):
-        """Add failure with reason as string."""
-        self.num_failed += 1
+        def fail(self, string=None):
+            """Add failure with reason as string."""
+            # TODO: possibly limit number of printed strings
+            self.num_failed += 1
+            if string is not None:
+                self.fail_strings.append(str(string))
 
-        # TODO: possibly limit number of printed strings
-        if string is not None:
-            self.fail_strings += [str(string)]
+    try:
+        counter = _FailCounter()
+        yield counter
+    finally:
 
-    def __exit__(self, type, value, traceback):
-        if self.num_failed == 0:
-            self.log('{:<70}: Completed all test cases.'
-                     ''.format(self.test_name))
+        if counter.num_failed == 0:
+            logger('{:<70}: Completed all test cases.'.format(test_name))
         else:
-            print(self.test_name)
-
-            for fail_string in self.fail_strings:
+            print(test_name)
+            for fail_string in counter.fail_strings:
                 print(fail_string)
+            if err_msg is not None:
+                print(err_msg)
+            print('*** FAILED {} TEST CASE(S) ***'.format(counter.num_failed))
 
-            if self.err_msg is not None:
-                print(self.err_msg)
-            print('*** FAILED {} TEST CASE(S) ***'.format(self.num_failed))
 
-
-class Timer(object):
-
+@contextmanager
+def timer(name=None):
     """A timer context manager.
 
     Usage::
 
-        with Timer('name'):
+        with timer('name'):
             # Do stuff
 
     Prints the time stuff took to execute.
     """
+    if name is None:
+        name = "Elapsed"
 
-    def __init__(self, name=None):
-        if name is not None:
-            self.name = name
-        else:
-            self.name = 'Elapsed'
-        self.tstart = None
-
-    def __enter__(self):
-        self.tstart = time()
-
-    def __exit__(self, type, value, traceback):
-        time_str = '{:.3f}'.format(time() - self.tstart)
-        print('{:>30s} : {:>10s} '.format(self.name, time_str))
+    try:
+        tstart = time()
+        yield
+    finally:
+        time_str = '{:.3f}'.format(time() - tstart)
+        print('{:>30s} : {:>10s} '.format(name, time_str))
 
 
 def timeit(arg):
@@ -527,13 +544,13 @@ def timeit(arg):
 
     if callable(arg):
         def timed_function(*args, **kwargs):
-            with Timer(str(arg)):
+            with timer(str(arg)):
                 return arg(*args, **kwargs)
         return timed_function
     else:
         def _timeit_helper(func):
             def timed_function(*args, **kwargs):
-                with Timer(arg):
+                with timer(arg):
                     return func(*args, **kwargs)
             return timed_function
         return _timeit_helper
@@ -640,16 +657,18 @@ def test(arguments=None):
     try:
         import pytest
     except ImportError:
-        raise ImportError('ODL tests cannot be run without `pytest` installed.'
-                          '\nRun `$ pip install [--user] odl[testing]` in '
-                          'order to install `pytest`.')
+        raise ImportError(
+            'ODL tests cannot be run without `pytest` installed.\n'
+            'Run `$ pip install [--user] odl[testing]` in order to install '
+            '`pytest`.'
+        )
 
-    from .pytest_plugins import collect_ignore
+    from .pytest_config import collect_ignore
 
     this_dir = os.path.dirname(__file__)
     odl_root = os.path.abspath(os.path.join(this_dir, os.pardir, os.pardir))
 
-    args = ['-x', '{root}/odl'.format(root=odl_root)]
+    args = ['{root}/odl'.format(root=odl_root)]
 
     ignores = ['--ignore={}'.format(file) for file in collect_ignore]
     args.extend(ignores)
@@ -660,18 +679,32 @@ def test(arguments=None):
     pytest.main(args)
 
 
-def run_doctests(skip_if=False):
+def run_doctests(skip_if=False, **kwargs):
     """Run all doctests in the current module.
 
-    For ``skip_if=True``, the tests in the module are skipped.
+    This function calls ``doctest.testmod()``, by default with the options
+    ``optionflags=doctest.NORMALIZE_WHITESPACE`` and
+    ``extraglobs={'odl': odl, 'np': np}``. This can be changed with
+    keyword arguments.
+
+    Parameters
+    ----------
+    skip_if : bool
+        For ``True``, skip the doctests in this module.
+    kwargs :
+        Extra keyword arguments passed on to the ``doctest.testmod``
+        function.
     """
     from doctest import testmod, NORMALIZE_WHITESPACE, SKIP
-    optionflags = NORMALIZE_WHITESPACE
+    from packaging.version import parse as parse_version
+    import odl
+    import numpy as np
+
+    optionflags = kwargs.pop('optionflags', NORMALIZE_WHITESPACE)
     if skip_if:
         optionflags |= SKIP
 
-    import odl
-    import numpy as np
+    extraglobs = kwargs.pop('extraglobs', {'odl': odl, 'np': np})
 
     if run_from_ipython():
         try:
@@ -681,13 +714,29 @@ def run_doctests(skip_if=False):
         else:
             if parse_version(spyder.__version__) < parse_version('3.1.4'):
                 warnings.warn('A bug with IPython and Spyder < 3.1.4 '
-                              'sometimes cause doctests to fail to run. '
+                              'sometimes causes doctests to fail to run. '
                               'Please upgrade Spyder or use another '
                               'interpreter if the doctests do not work.',
                               RuntimeWarning)
 
-    testmod(optionflags=optionflags,
-            extraglobs={'odl': odl, 'np': np})
+    testmod(optionflags=optionflags, extraglobs=extraglobs, **kwargs)
+
+
+def test_file(file, args=None):
+    """Run tests in file with proper default arguments."""
+    try:
+        import pytest
+    except ImportError:
+        raise ImportError('ODL tests cannot be run without `pytest` installed.'
+                          '\nRun `$ pip install [--user] odl[testing]` in '
+                          'order to install `pytest`.')
+
+    if args is None:
+        args = []
+
+    args.extend([str(file.replace('\\', '/')), '-v', '--capture=sys'])
+
+    pytest.main(args)
 
 
 if __name__ == '__main__':

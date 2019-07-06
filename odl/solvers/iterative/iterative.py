@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -8,10 +8,9 @@
 
 """Simple iterative type optimization schemes."""
 
-# Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
-from future import standard_library
-standard_library.install_aliases()
+from builtins import next
+import numpy as np
 
 from odl.operator import IdentityOperator, OperatorComp, OperatorSum
 from odl.util import normalized_scalar_param_list
@@ -24,8 +23,8 @@ __all__ = ('landweber', 'conjugate_gradient', 'conjugate_gradient_normal',
 # TODO: update all docs
 
 
-def landweber(op, x, rhs, niter, omega=1, projection=None, callback=None):
-    """Optimized implementation of Landweber's method.
+def landweber(op, x, rhs, niter, omega=None, projection=None, callback=None):
+    r"""Optimized implementation of Landweber's method.
 
     Solves the inverse problem::
 
@@ -46,6 +45,7 @@ def landweber(op, x, rhs, niter, omega=1, projection=None, callback=None):
         Number of iterations.
     omega : positive float, optional
         Relaxation parameter in the iteration.
+        Default: ``1 / op.norm(estimate=True) ** 2``
     projection : callable, optional
         Function that can be used to modify the iterates in each iteration,
         for example enforcing positivity. The function should take one
@@ -61,14 +61,14 @@ def landweber(op, x, rhs, niter, omega=1, projection=None, callback=None):
     .. math::
         \mathcal{A} (x) = y,
 
-    for a given :math:`y\\in \mathcal{Y}`, i.e. an approximate
+    for a given :math:`y\in \mathcal{Y}`, i.e. an approximate
     solution :math:`x^*` to
 
     .. math::
-        \min_{x\\in \mathcal{X}} \| \mathcal{A}(x) - y \|_{\mathcal{Y}}^2
+        \min_{x\in \mathcal{X}} \| \mathcal{A}(x) - y \|_{\mathcal{Y}}^2
 
     for a (Frechet-) differentiable operator
-    :math:`\mathcal{A}: \mathcal{X} \\to \mathcal{Y}` between Hilbert
+    :math:`\mathcal{A}: \mathcal{X} \to \mathcal{Y}` between Hilbert
     spaces :math:`\mathcal{X}` and :math:`\mathcal{Y}`. The method
     starts from an initial guess :math:`x_0` and uses the
     iteration
@@ -77,11 +77,11 @@ def landweber(op, x, rhs, niter, omega=1, projection=None, callback=None):
         x_{k+1} = x_k -
                   \omega \ \partial \mathcal{A}(x)^* (\mathcal{A}(x_k) - y),
 
-    where :math:`\partial \mathcal{A}(x)` is the Frechet derivativ
+    where :math:`\partial \mathcal{A}(x)` is the Frechet derivative
     of :math:`\mathcal{A}` at :math:`x` and :math:`\omega` is a
     relaxation parameter. For linear problems, a choice
-    :math:`0 < \omega < 2/\\lVert \mathcal{A}^2\\rVert` guarantees
-    convergence, where :math:`\\lVert\mathcal{A}\\rVert` stands for the
+    :math:`0 < \omega < 2/\lVert \mathcal{A}^2\rVert` guarantees
+    convergence, where :math:`\lVert\mathcal{A}\rVert` stands for the
     operator norm of :math:`\mathcal{A}`.
 
     Users may also optionally provide a projection to project each
@@ -99,6 +99,9 @@ def landweber(op, x, rhs, niter, omega=1, projection=None, callback=None):
     if x not in op.domain:
         raise TypeError('`x` {!r} is not in the domain of `op` {!r}'
                         ''.format(x, op.domain))
+
+    if omega is None:
+        omega = 1 / op.norm(estimate=True) ** 2
 
     # Reusable temporaries
     tmp_ran = op.range.element()
@@ -238,7 +241,8 @@ Conjugate_gradient_on_the_normal_equations>`_.
     See Also
     --------
     conjugate_gradient : Optimized solver for symmetric matrices
-    conjugate_gradient_nonlinear : Equivalent solver but for nonlinear case
+    odl.solvers.smooth.nonlinear_cg.conjugate_gradient_nonlinear :
+        Equivalent solver for the nonlinear case
     """
     # TODO: add a book reference
     # TODO: update doc
@@ -385,9 +389,9 @@ def gauss_newton(op, x, rhs, niter, zero_seq=exp_zero_seq(2.0),
             callback(x)
 
 
-def kaczmarz(ops, x, rhs, niter, omega=1, projection=None,
-             callback=None):
-    """Optimized implementation of Kaczmarz's method.
+def kaczmarz(ops, x, rhs, niter, omega=1, projection=None, random=False,
+             callback=None, callback_loop='outer'):
+    r"""Optimized implementation of Kaczmarz's method.
 
     Solves the inverse problem given by the set of equations::
 
@@ -416,8 +420,13 @@ def kaczmarz(ops, x, rhs, niter, omega=1, projection=None,
         Function that can be used to modify the iterates in each iteration,
         for example enforcing positivity. The function should take one
         argument and modify it in-place.
+    random : bool, optional
+        If `True`, the order of the operators is randomized in each iteration.
     callback : callable, optional
         Object executing code per iteration, e.g. plotting each iterate.
+    callback_loop : {'inner', 'outer'}
+        Whether the callback should be called in the inner or outer loop.
+
 
     Notes
     -----
@@ -425,17 +434,17 @@ def kaczmarz(ops, x, rhs, niter, omega=1, projection=None,
     the inverse problem of the first kind
 
     .. math::
-        \mathcal{A}_i (x) = y_i \\quad 1 \\leq i \\leq n,
+        \mathcal{A}_i (x) = y_i \quad 1 \leq i \leq n,
 
-    for a given :math:`y_n \\in \mathcal{Y}_n`, i.e. an approximate
+    for a given :math:`y_n \in \mathcal{Y}_n`, i.e. an approximate
     solution :math:`x^*` to
 
     .. math::
-        \min_{x\\in \mathcal{X}}
-        \\sum_{i=1}^n \| \mathcal{A}_i(x) - y_i \|_{\mathcal{Y}_i}^2
+        \min_{x\in \mathcal{X}}
+        \sum_{i=1}^n \| \mathcal{A}_i(x) - y_i \|_{\mathcal{Y}_i}^2
 
     for a (Frechet-) differentiable operator
-    :math:`\mathcal{A}: \mathcal{X} \\to \mathcal{Y}` between Hilbert
+    :math:`\mathcal{A}: \mathcal{X} \to \mathcal{Y}` between Hilbert
     spaces :math:`\mathcal{X}` and :math:`\mathcal{Y}`. The method
     starts from an initial guess :math:`x_0` and uses the
     iteration
@@ -446,10 +455,10 @@ def kaczmarz(ops, x, rhs, niter, omega=1, projection=None,
 
     where :math:`\partial \mathcal{A}_{[k]}(x_k)` is the Frechet derivative
     of :math:`\mathcal{A}_{[k]}` at :math:`x_k`, :math:`\omega_{[k]}` is a
-    relaxation parameter and :math:`[k] := k \\text{ mod } n`.
+    relaxation parameter and :math:`[k] := k \text{ mod } n`.
 
     For linear problems, a choice
-    :math:`0 < \omega_i < 2/\\lVert \mathcal{A}_{i}^2\\rVert` guarantees
+    :math:`0 < \omega_i < 2/\lVert \mathcal{A}_{i}^2\rVert` guarantees
     convergence, where :math:`\|\mathcal{A}_{i}\|` stands for the
     operator norm of :math:`\mathcal{A}_{i}`.
 
@@ -467,7 +476,7 @@ def kaczmarz(ops, x, rhs, niter, omega=1, projection=None,
     """
     domain = ops[0].domain
     if any(domain != opi.domain for opi in ops):
-        raise ValueError('`opi[i].domain` are not all equal')
+        raise ValueError('domains of `ops` are not all equal')
 
     if x not in domain:
         raise TypeError('`x` {!r} is not in the domain of `ops` {!r}'
@@ -489,7 +498,12 @@ def kaczmarz(ops, x, rhs, niter, omega=1, projection=None,
 
     # Iteratively find solution
     for _ in range(niter):
-        for i in range(len(ops)):
+        if random:
+            rng = np.random.permutation(range(len(ops)))
+        else:
+            rng = range(len(ops))
+
+        for i in rng:
             # Find residual
             tmp_ran = tmp_rans[ops[i].range]
             ops[i](x, out=tmp_ran)
@@ -502,11 +516,12 @@ def kaczmarz(ops, x, rhs, niter, omega=1, projection=None,
             if projection is not None:
                 projection(x)
 
-            if callback is not None:
+            if callback is not None and callback_loop == 'inner':
                 callback(x)
+        if callback is not None and callback_loop == 'outer':
+            callback(x)
 
 
 if __name__ == '__main__':
-    # pylint: disable=wrong-import-position
     from odl.util.testutils import run_doctests
     run_doctests()

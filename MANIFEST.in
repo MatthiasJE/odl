@@ -1,11 +1,13 @@
 include CONTRIBUTING.md
 include LICENSE
 include README.md
-include requirements.txt
 include setup.cfg
 include setup.py
-include test_requirements.txt
 include odl/pytest.ini
-exclude pytest.ini
+include odl/VERSION
+exclude .*
 recursive-include odl/test test*.py *test.py
+prune conda
+prune doc
 prune examples
+prune tools

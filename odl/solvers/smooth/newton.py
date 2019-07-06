@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -8,12 +8,9 @@
 
 """(Quasi-)Newton schemes to find zeros of functionals."""
 
-# Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
-from future import standard_library
-standard_library.install_aliases()
-
 import numpy as np
+
 from odl.solvers.util import ConstantLineSearch
 from odl.solvers.iterative.iterative import conjugate_gradient
 
@@ -22,7 +19,7 @@ __all__ = ('newtons_method', 'bfgs_method', 'broydens_method')
 
 
 def _bfgs_direction(s, y, x, hessinv_estimate=None):
-    """Compute ``Hn^-1(x)`` for the L-BFGS method.
+    r"""Compute ``Hn^-1(x)`` for the L-BFGS method.
 
     Parameters
     ----------
@@ -46,10 +43,10 @@ def _bfgs_direction(s, y, x, hessinv_estimate=None):
 
     .. math::
         H_{n+1}^{-1} =
-        \\left(I - \\frac{ s_n y_n^T}{y_n^T s_n} \\right)
+        \left(I - \frac{ s_n y_n^T}{y_n^T s_n} \right)
         H_{n}^{-1}
-        \\left(I - \\frac{ y_n s_n^T}{y_n^T s_n} \\right) +
-        \\frac{s_n s_n^T}{y_n^T \, s_n}
+        \left(I - \frac{ y_n s_n^T}{y_n^T s_n} \right) +
+        \frac{s_n s_n^T}{y_n^T \, s_n}
 
     With :math:`H_0^{-1}` given by ``hess_estimate``.
     """
@@ -75,7 +72,7 @@ def _bfgs_direction(s, y, x, hessinv_estimate=None):
 
 
 def _broydens_direction(s, y, x, hessinv_estimate=None, impl='first'):
-    """Compute ``Hn^-1(x)`` for Broydens method.
+    r"""Compute ``Hn^-1(x)`` for Broydens method.
 
     Parameters
     ----------
@@ -100,7 +97,7 @@ def _broydens_direction(s, y, x, hessinv_estimate=None, impl='first'):
     For ``impl = 'first'``, :math:`H_n^{-1}` is defined recursively as
 
     .. math::
-        H_{n+1}^{-1} = \\left(I + s_n y_n^T \\right) H_{n}^{-1}
+        H_{n+1}^{-1} = \left(I + s_n y_n^T \right) H_{n}^{-1}
 
     and for ``impl = 'second'``:
 
@@ -129,7 +126,7 @@ def _broydens_direction(s, y, x, hessinv_estimate=None, impl='first'):
 
 def newtons_method(f, x, line_search=1.0, maxiter=1000, tol=1e-16,
                    cg_iter=None, callback=None):
-    """Newton's method for minimizing a functional.
+    r"""Newton's method for minimizing a functional.
 
     Notes
     -----
@@ -140,19 +137,19 @@ def newtons_method(f, x, line_search=1.0, maxiter=1000, tol=1e-16,
         \min f(x)
 
     for a differentiable function
-    :math:`f: \mathcal{X}\\to \mathbb{R}` on a Hilbert space
+    :math:`f: \mathcal{X}\to \mathbb{R}` on a Hilbert space
     :math:`\mathcal{X}`. It does so by finding a zero of the gradient
 
     .. math::
-        \\nabla f: \mathcal{X} \\to \mathcal{X}.
+        \nabla f: \mathcal{X} \to \mathcal{X}.
 
     of finding a root of a function.
 
     The algorithm is well-known and there is a vast literature about it.
-    Among others, the method is described in [BV2004]_, Sections 9.5
+    Among others, the method is described in [BV2004], Sections 9.5
     and 10.2 (`book available online
     <http://stanford.edu/~boyd/cvxbook/bv_cvxbook.pdf>`_),
-    [GNS2009]_,  Section 2.7 for solving nonlinear equations and Section
+    [GNS2009],  Section 2.7 for solving nonlinear equations and Section
     11.3 for its use in minimization, and wikipedia on `Newton's_method
     <https://en.wikipedia.org/wiki/Newton's_method>`_.
 
@@ -164,9 +161,9 @@ def newtons_method(f, x, line_search=1.0, maxiter=1000, tol=1e-16,
     and then updating as
 
     .. math::
-        x_{k+1} = x_k + \\alpha x_k,
+        x_{k+1} = x_k + \alpha x_k,
 
-    where :math:`\\alpha` is a suitable step length (see the
+    where :math:`\alpha` is a suitable step length (see the
     references). In this implementation the system of equations are
     solved using the conjugate gradient method.
 
@@ -189,6 +186,14 @@ def newtons_method(f, x, line_search=1.0, maxiter=1000, tol=1e-16,
         for computing the search direction.
     callback : callable, optional
         Object executing code per iteration, e.g. plotting each iterate
+
+    References
+    ----------
+    [BV2004] Boyd, S, and Vandenberghe, L. *Convex optimization*.
+    Cambridge university press, 2004.
+
+    [GNS2009] Griva, I, Nash, S G, and Sofer, A. *Linear and nonlinear
+    optimization*. Siam, 2009.
     """
     # TODO: update doc
     grad = f.gradient
@@ -240,7 +245,7 @@ def newtons_method(f, x, line_search=1.0, maxiter=1000, tol=1e-16,
 
 def bfgs_method(f, x, line_search=1.0, maxiter=1000, tol=1e-15, num_store=None,
                 hessinv_estimate=None, callback=None):
-    """Quasi-Newton BFGS method to minimize a differentiable function.
+    r"""Quasi-Newton BFGS method to minimize a differentiable function.
 
     Can use either the regular BFGS method, or the limited memory BFGS method.
 
@@ -254,18 +259,18 @@ def bfgs_method(f, x, line_search=1.0, maxiter=1000, tol=1e-15, num_store=None,
         \min f(x)
 
     for a differentiable function
-    :math:`f: \mathcal{X}\\to \mathbb{R}` on a Hilbert space
+    :math:`f: \mathcal{X}\to \mathbb{R}` on a Hilbert space
     :math:`\mathcal{X}`. It does so by finding a zero of the gradient
 
     .. math::
-        \\nabla f: \mathcal{X} \\to \mathcal{X}.
+        \nabla f: \mathcal{X} \to \mathcal{X}.
 
     The QN method is an approximate Newton method, where the Hessian
     is approximated and gradually updated in each step. This
     implementation uses the rank-one BFGS update schema where the
     inverse of the Hessian is recalculated in each iteration.
 
-    The algorithm is described in [GNS2009]_, Section 12.3 and in the
+    The algorithm is described in [GNS2009], Section 12.3 and in the
     `BFGS Wikipedia article
     <https://en.wikipedia.org/wiki/Broyden%E2%80%93Fletcher%E2%80%93\
 Goldfarb%E2%80%93Shanno_algorithm>`_
@@ -293,6 +298,11 @@ Goldfarb%E2%80%93Shanno_algorithm>`_
         Default: Identity on ``f.domain``
     callback : callable, optional
         Object executing code per iteration, e.g. plotting each iterate.
+
+    References
+    ----------
+    [GNS2009] Griva, I, Nash, S G, and Sofer, A. *Linear and nonlinear
+    optimization*. Siam, 2009.
     """
     grad = f.gradient
     if x not in grad.domain:
@@ -350,7 +360,7 @@ Goldfarb%E2%80%93Shanno_algorithm>`_
 def broydens_method(f, x, line_search=1.0, impl='first', maxiter=1000,
                     tol=1e-15, hessinv_estimate=None,
                     callback=None):
-    """Broyden's first method, a quasi-Newton scheme.
+    r"""Broyden's first method, a quasi-Newton scheme.
 
     Notes
     -----
@@ -362,15 +372,15 @@ def broydens_method(f, x, line_search=1.0, impl='first', maxiter=1000,
         \min f(x)
 
     for a differentiable function
-    :math:`f: \mathcal{X}\\to \mathbb{R}` on a Hilbert space
+    :math:`f: \mathcal{X}\to \mathbb{R}` on a Hilbert space
     :math:`\mathcal{X}`. It does so by finding a zero of the gradient
 
     .. math::
-        \\nabla f: \mathcal{X} \\to \mathcal{X}
+        \nabla f: \mathcal{X} \to \mathcal{X}
 
     using a Newton-type update scheme with approximate Hessian.
 
-    The algorithm is described in [Bro1965]_ and [Kva1991]_, and in a
+    The algorithm is described in [Bro1965] and [Kva1991], and in a
     `Wikipedia article
     <https://en.wikipedia.org/wiki/Broyden's_method>`_.
 
@@ -397,6 +407,15 @@ def broydens_method(f, x, line_search=1.0, impl='first', maxiter=1000,
         Default: Identity on ``f.domain``
     callback : callable, optional
         Object executing code per iteration, e.g. plotting each iterate.
+
+    References
+    ----------
+    [Bro1965] Broyden, C G. *A class of methods for solving nonlinear
+    simultaneous equations*. Mathematics of computation, 33 (1965),
+    pp 577--593.
+
+    [Kva1991] Kvaalen, E. *A faster Broyden method*. BIT Numerical
+    Mathematics 31 (1991), pp 369--372.
     """
     grad = f.gradient
     if x not in grad.domain:
@@ -405,6 +424,11 @@ def broydens_method(f, x, line_search=1.0, impl='first', maxiter=1000,
 
     if not callable(line_search):
         line_search = ConstantLineSearch(line_search)
+
+    impl, impl_in = str(impl).lower(), impl
+    if impl not in ('first', 'second'):
+        raise ValueError('`impl` {!r} not understood'
+                         ''.format(impl_in))
 
     ss = []
     ys = []
@@ -468,6 +492,5 @@ def broydens_method(f, x, line_search=1.0, impl='first', maxiter=1000,
 
 
 if __name__ == '__main__':
-    # pylint: disable=wrong-import-position
     from odl.util.testutils import run_doctests
     run_doctests()

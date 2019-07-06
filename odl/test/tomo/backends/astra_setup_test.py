@@ -199,7 +199,7 @@ def test_astra_projection_geometry():
     # Fan flat
     src_rad = 10
     det_rad = 5
-    geom_ff = odl.tomo.FanFlatGeometry(apart, dpart, src_rad, det_rad)
+    geom_ff = odl.tomo.FanBeamGeometry(apart, dpart, src_rad, det_rad)
     astra_geom = odl.tomo.astra_projection_geometry(geom_ff)
     assert astra_geom['type'] == 'fanflat_vec'
 
@@ -212,15 +212,14 @@ def test_astra_projection_geometry():
     assert astra_geom['type'] == 'parallel3d_vec'
 
     # Circular conebeam flat
-    geom_ccf = odl.tomo.CircularConeFlatGeometry(apart, dpart, src_rad,
-                                                 det_rad)
+    geom_ccf = odl.tomo.ConeBeamGeometry(apart, dpart, src_rad, det_rad)
     astra_geom = odl.tomo.astra_projection_geometry(geom_ccf)
     assert astra_geom['type'] == 'cone_vec'
 
     # Helical conebeam flat
     pitch = 1
-    geom_hcf = odl.tomo.HelicalConeFlatGeometry(apart, dpart, src_rad,
-                                                det_rad, pitch)
+    geom_hcf = odl.tomo.ConeBeamGeometry(apart, dpart, src_rad, det_rad,
+                                         pitch=pitch)
     astra_geom = odl.tomo.astra_projection_geometry(geom_hcf)
     assert astra_geom['type'] == 'cone_vec'
 
@@ -241,7 +240,7 @@ def test_volume_data_2d():
 
     # From existing
     discr_dom = _discrete_domain(2, 'nearest')
-    data_in = discr_dom.element(np.ones(10 * 20, dtype='float32'))
+    data_in = discr_dom.element(np.ones((10, 20), dtype='float32'))
     data_id = odl.tomo.astra_data(VOL_GEOM_2D, 'volume', data=data_in)
     data_out = astra.data2d.get_shared(data_id)
     assert data_out.shape == (10, 20)
@@ -262,7 +261,7 @@ def test_volume_data_3d():
 
     # From existing
     discr_dom = _discrete_domain(3, 'nearest')
-    data_in = discr_dom.element(np.ones(10 * 20 * 30, dtype='float32'))
+    data_in = discr_dom.element(np.ones((10, 20, 30), dtype='float32'))
     data_id = odl.tomo.astra_data(VOL_GEOM_3D, 'volume', data=data_in)
     data_out = astra.data3d.get_shared(data_id)
     assert data_out.shape == (10, 20, 30)
@@ -293,9 +292,6 @@ def test_parallel_2d_projector():
 def test_parallel_3d_projector():
     """Create ASTRA 3D projectors."""
 
-    odl.tomo.astra_projector('nearest', VOL_GEOM_3D, PROJ_GEOM_3D, ndim=3,
-                             impl='cuda')
-
     # Run as a real test once ASTRA supports this construction
     with pytest.raises(ValueError):
         odl.tomo.astra_projector('nearest', VOL_GEOM_3D, PROJ_GEOM_3D,
@@ -306,6 +302,15 @@ def test_parallel_3d_projector():
                                  ndim=3, impl='cpu')
 
 
+@pytest.mark.skipif(not odl.tomo.ASTRA_CUDA_AVAILABLE,
+                    reason="ASTRA cuda not available")
+def test_parallel_3d_projector_gpu():
+    """Create ASTRA 3D projectors on GPU."""
+
+    odl.tomo.astra_projector('nearest', VOL_GEOM_3D, PROJ_GEOM_3D, ndim=3,
+                             impl='cuda')
+
+
 def test_astra_algorithm():
     """Create ASTRA algorithm object."""
 
@@ -313,7 +318,6 @@ def test_astra_algorithm():
     ndim = 2
     impl = 'cpu'
     vol_id = odl.tomo.astra_data(VOL_GEOM_2D, 'volume', ndim=ndim)
-    rec_id = odl.tomo.astra_data(VOL_GEOM_2D, 'volume', ndim=ndim)
     sino_id = odl.tomo.astra_data(PROJ_GEOM_2D, 'projection', ndim=ndim)
     proj_id = odl.tomo.astra_projector('nearest', VOL_GEOM_2D, PROJ_GEOM_2D,
                                        ndim=ndim, impl=impl)
@@ -340,6 +344,18 @@ def test_astra_algorithm():
         alg_id = odl.tomo.astra_algorithm(direction, ndim, vol_id, sino_id,
                                           proj_id, impl)
         astra.algorithm.delete(alg_id)
+
+
+@pytest.mark.skipif(not odl.tomo.ASTRA_CUDA_AVAILABLE,
+                    reason="ASTRA cuda not available")
+def test_astra_algorithm_gpu():
+    """Create ASTRA algorithm object on GPU."""
+
+    direction = 'forward'
+    ndim = 2
+    vol_id = odl.tomo.astra_data(VOL_GEOM_2D, 'volume', ndim=ndim)
+    rec_id = odl.tomo.astra_data(VOL_GEOM_2D, 'volume', ndim=ndim)
+    sino_id = odl.tomo.astra_data(PROJ_GEOM_2D, 'projection', ndim=ndim)
 
     # 2D CUDA
     proj_id = odl.tomo.astra_projector('nearest', VOL_GEOM_2D, PROJ_GEOM_2D,
@@ -379,25 +395,24 @@ def test_geom_to_vec():
     # Fanbeam flat
     src_rad = 10
     det_rad = 5
-    geom_ff = odl.tomo.FanFlatGeometry(apart, dpart, src_rad, det_rad)
+    geom_ff = odl.tomo.FanBeamGeometry(apart, dpart, src_rad, det_rad)
     vec = odl.tomo.astra_conebeam_2d_geom_to_vec(geom_ff)
 
     assert vec.shape == (apart.size, 6)
 
     # Circular cone flat
     dpart = odl.uniform_partition([-40, -3], [40, 3], (10, 5))
-    geom_ccf = odl.tomo.CircularConeFlatGeometry(apart, dpart, src_rad,
-                                                 det_rad)
+    geom_ccf = odl.tomo.ConeBeamGeometry(apart, dpart, src_rad, det_rad)
     vec = odl.tomo.astra_conebeam_3d_geom_to_vec(geom_ccf)
     assert vec.shape == (apart.size, 12)
 
     # Helical cone flat
     pitch = 1
-    geom_hcf = odl.tomo.HelicalConeFlatGeometry(apart, dpart, src_rad,
-                                                det_rad, pitch)
+    geom_hcf = odl.tomo.ConeBeamGeometry(apart, dpart, src_rad, det_rad,
+                                         pitch=pitch)
     vec = odl.tomo.astra_conebeam_3d_geom_to_vec(geom_hcf)
     assert vec.shape == (apart.size, 12)
 
 
 if __name__ == '__main__':
-    pytest.main([str(__file__.replace('\\', '/')), '-v'])
+    odl.util.test_file(__file__)

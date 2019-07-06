@@ -10,10 +10,10 @@ import numpy as np
 import odl
 
 
-# --- Set-up geometry of the problem --- #
+# --- Set up geometry of the problem --- #
 
 
-# Discrete reconstruction space: discretized functions on the cube
+# Reconstruction space: discretized functions on the cube
 # [-20, 20]^2 with 300 samples per dimension.
 reco_space = odl.uniform_discr(
     min_pt=[-20, -20], max_pt=[20, 20], shape=[300, 300],
@@ -22,14 +22,14 @@ reco_space = odl.uniform_discr(
 # Make a circular cone beam geometry with flat detector
 # Angles: uniformly spaced, n = 360, min = 0, max = 2 * pi
 angle_partition = odl.uniform_partition(0, 2 * np.pi, 360)
-# Detector: uniformly sampled, n = 558, min = -60, max = 60
-detector_partition = odl.uniform_partition(-60, 60, 558)
+# Detector: uniformly sampled, n = 512, min = -60, max = 60
+detector_partition = odl.uniform_partition(-60, 60, 512)
 # Geometry with large fan angle
-geometry = odl.tomo.FanFlatGeometry(
+geometry = odl.tomo.FanBeamGeometry(
     angle_partition, detector_partition, src_radius=40, det_radius=40)
 
 
-# --- Create Filtered Back-Projection (FBP) operator --- #
+# --- Create Filtered Back-projection (FBP) operator --- #
 
 
 # Ray transform (= forward projection).
@@ -55,6 +55,6 @@ fbp_reconstruction = fbp(proj_data)
 
 # Shows a slice of the phantom, projections, and reconstruction
 phantom.show(title='Phantom')
-proj_data.show(title='Projection data (sinogram)')
-fbp_reconstruction.show(title='Filtered back-projection')
-(phantom - fbp_reconstruction).show(title='Error')
+proj_data.show(title='Projection Data (Sinogram)')
+fbp_reconstruction.show(title='Filtered Back-projection')
+(phantom - fbp_reconstruction).show(title='Error', force_show=True)

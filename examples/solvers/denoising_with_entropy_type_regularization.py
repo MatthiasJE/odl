@@ -1,4 +1,4 @@
-"""Denoising using the Chambolle-Pock solver with TV & entropy-type data term.
+"""Denoising using PDHG with TV & entropy-type data term.
 
 Solves the following optimization problem:
 
@@ -8,12 +8,12 @@ where ``KL(x, g)`` is the Kullback-Leibler divergence, ``grad`` is the
 spatial gradient, ``|| . ||_1`` is the 1 norm and lam is a regularization
 constant.
 
-For details see :ref:`chambolle_pock`, :ref:`proximal_operators`, and
+For details see :ref:`PDHG`, :ref:`proximal_operators`, and
 references therein.
 """
 
 import numpy as np
-import scipy
+import scipy.misc
 import odl
 
 
@@ -47,7 +47,7 @@ op = odl.BroadcastOperator(odl.IdentityOperator(space), gradient)
 # Proximal operator related to the primal variable
 
 # Non-negativity constraint
-g = odl.solvers.IndicatorNonnegativity(op.domain)
+f = odl.solvers.IndicatorNonnegativity(op.domain)
 
 # Functionals related to the dual variable
 
@@ -58,14 +58,14 @@ kl_divergence = odl.solvers.KullbackLeibler(space, prior=noisy)
 l1_norm = 0.1 * odl.solvers.L1Norm(gradient.range)
 
 # Make separable sum of functionals, order must correspond to the operator K
-f = odl.solvers.SeparableSum(kl_divergence, l1_norm)
+g = odl.solvers.SeparableSum(kl_divergence, l1_norm)
 
 # Optional: pass callback objects to solver
 callback = (odl.solvers.CallbackPrintIteration() &
             odl.solvers.CallbackShow(step=5))
 
 
-# --- Select solver parameters and solve using Chambolle-Pock --- #
+# --- Select solver parameters and solve using PDHG --- #
 
 
 # Estimated operator norm, add 10 percent to ensure ||K||_2^2 * sigma * tau < 1
@@ -77,8 +77,8 @@ sigma = 0.1 / op_norm  # Step size for the dual variable
 x = op.domain.zero()
 
 # Run algorithm (and display intermediates)
-odl.solvers.chambolle_pock_solver(
-    x, f, g, op, tau=tau, sigma=sigma, niter=100, callback=callback)
+odl.solvers.pdhg(x, f, g, op, niter=100, tau=tau, sigma=sigma,
+                 callback=callback)
 
 # Display images
 orig.show(title='original image')

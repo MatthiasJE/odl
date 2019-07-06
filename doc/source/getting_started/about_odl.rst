@@ -106,7 +106,7 @@ It is the default in the convenience function `uniform_discr`:
 
     >>> l2_discr = odl.uniform_discr(0, 1, 5)  # Omega = [0, 1], 5 subintervals
     >>> type(l2_discr)
-    <class 'odl.discr.lp_discr.DiscreteLp'>
+    odl.discr.lp_discr.DiscreteLp
     >>> l2_discr.exponent
     2.0
     >>> l2_discr.domain
@@ -119,9 +119,9 @@ If we, for example, want to discretize the function ``f(x) = exp(-x)``, we can s
 
     >>> exp_discr = l2_discr.element(lambda x: np.exp(-x))
     >>> type(exp_discr)
-    <class 'odl.discr.lp_discr.DiscreteLpElement'>
+    odl.discr.lp_discr.DiscreteLpElement
     >>> print(exp_discr)
-    [0.904837418036, 0.740818220682, 0.606530659713, 0.496585303791, 0.406569659741]
+    [ 0.90483742,  0.74081822,  0.60653066,  0.4965853 ,  0.40656966]
     >>> exp_discr.shape
     (5,)
 
@@ -142,7 +142,7 @@ The method needs a relaxation :math:`\lambda < 2 / \lVert A\rvert^2` to converge
 
     >>> matrix = np.array([[1.0, 3.0, 2.0],
     ...                    [2.0, -1.0, 1.0]])
-    >>> matrix_op = odl.MatVecOperator(matrix)  # operator defined by the matrix
+    >>> matrix_op = odl.MatrixOperator(matrix)  # operator defined by the matrix
     >>> matrix_op.domain
     rn(3)
     >>> matrix_op.range
@@ -166,7 +166,7 @@ If we now exchange ``matrix_op`` and ``data`` with a tomographic projector and l
 Further features
 ================
 * A unified structure `Geometry` for representing tomographic acquisition geometries
-* Interfaces to fast external libraries, e.g. `ASTRA`_ for X-ray tomography, `STIR`_ for emission tomography (preliminary), `pyFFTW`_ for fast Fourier transforms, ...
+* Interfaces to fast external libraries, e.g. `ASTRA`_ for X-ray tomography, `pyFFTW`_ for fast Fourier transforms, ...
 * A growing number of "must-have" operators like `Gradient`, `FourierTransform`, `WaveletTransform`
 * Several solvers for variational inverse problems, ranging from simple `gradient methods <steepest_descent>` to state-of-the-art non-smooth primal-dual splitting methods like `Douglas-Rachford <douglas_rachford_pd>`
 * Standardized tests for the correctness of implementations of operators and spaces, e.g. does the adjoint operator fulfill its defining relation?
@@ -193,6 +193,5 @@ Further reading
 .. _real numbers: https://en.wikipedia.org/wiki/Real_number
 .. _rectangular boxes: https://en.wikipedia.org/wiki/Hypercube
 .. _set: https://en.wikipedia.org/wiki/Set_%28mathematics%29
-.. _STIR: http://stir.sourceforge.net/
 .. _vector space: https://en.wikipedia.org/wiki/Vector_space
 .. _vectorized: https://en.wikipedia.org/wiki/Array_programming

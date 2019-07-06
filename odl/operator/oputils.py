@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -8,17 +8,14 @@
 
 """Convenience functions for operators."""
 
-# Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
-from future import standard_library
-from future.utils import raise_from, native
-standard_library.install_aliases()
-
+from future.utils import native
 import numpy as np
 
-from odl.space.base_ntuples import FnBase
+from odl.space.base_tensors import TensorSpace
 from odl.space import ProductSpace
-from odl.util import as_flat_array
+from odl.util import nd_iterator
+from odl.util.testutils import noise_element
 
 __all__ = ('matrix_representation', 'power_method_opnorm', 'as_scipy_operator',
            'as_scipy_functional', 'as_proximal_lang_operator')
@@ -31,11 +28,56 @@ def matrix_representation(op):
     ----------
     op : `Operator`
         The linear operator of which one wants a matrix representation.
+        If the domain or range is a `ProductSpace`, it must be a power-space.
 
     Returns
-    ----------
+    -------
     matrix : `numpy.ndarray`
         The matrix representation of the operator.
+        The shape will be ``op.domain.shape + op.range.shape`` and the dtype
+        is the promoted (greatest) dtype of the domain and range.
+
+    Examples
+    --------
+    Approximate a matrix on its own:
+
+    >>> mat = np.array([[1, 2, 3],
+    ...                 [4, 5, 6],
+    ...                 [7, 8, 9]])
+    >>> op = odl.MatrixOperator(mat)
+    >>> matrix_representation(op)
+    array([[1, 2, 3],
+           [4, 5, 6],
+           [7, 8, 9]])
+
+    It also works with `ProductSpace`'s and higher dimensional `TensorSpace`'s.
+    In this case, the returned "matrix" will also be higher dimensional:
+
+    >>> space = odl.uniform_discr([0, 0], [2, 2], (2, 2))
+    >>> grad = odl.Gradient(space)
+    >>> tensor = odl.matrix_representation(grad)
+    >>> tensor.shape == (2, 2, 2, 2, 2)
+    True
+
+    Since the "matrix" is now higher dimensional, we need to use e.g.
+    `numpy.tensordot` if we want to compute with the matrix representation:
+
+    >>> x = space.element(lambda x: x[0] ** 2 + 2 * x[1] ** 2)
+    >>> grad(x)
+    ProductSpace(uniform_discr([ 0.,  0.], [ 2.,  2.], (2, 2)), 2).element([
+    <BLANKLINE>
+            [[ 2.  ,  2.  ],
+             [-2.75, -6.75]],
+    <BLANKLINE>
+            [[ 4.  , -4.75],
+             [ 4.  , -6.75]]
+    ])
+    >>> np.tensordot(tensor, x, axes=grad.domain.ndim)
+    array([[[ 2.  ,  2.  ],
+            [-2.75, -6.75]],
+    <BLANKLINE>
+           [[ 4.  , -4.75],
+            [ 4.  , -6.75]]])
 
     Notes
     ----------
@@ -46,73 +88,42 @@ def matrix_representation(op):
     if not op.is_linear:
         raise ValueError('the operator is not linear')
 
-    if not (isinstance(op.domain, FnBase) or
+    if not (isinstance(op.domain, TensorSpace) or
             (isinstance(op.domain, ProductSpace) and
-             all(isinstance(spc, FnBase) for spc in op.domain))):
-        raise TypeError('operator domain {!r} is not FnBase, nor ProductSpace '
-                        'with only FnBase components'.format(op.domain))
+             op.domain.is_power_space and
+             all(isinstance(spc, TensorSpace) for spc in op.domain))):
+        raise TypeError('operator domain {!r} is neither `TensorSpace` '
+                        'nor `ProductSpace` with only equal `TensorSpace` '
+                        'components'.format(op.domain))
 
-    if not (isinstance(op.range, FnBase) or
+    if not (isinstance(op.range, TensorSpace) or
             (isinstance(op.range, ProductSpace) and
-             all(isinstance(spc, FnBase) for spc in op.range))):
-        raise TypeError('operator range {!r} is not FnBase, nor ProductSpace '
-                        'with only FnBase components'.format(op.range))
-
-    # Get the size of the range, and handle ProductSpace
-    # Store for reuse in loop
-    op_ran_is_prod_space = isinstance(op.range, ProductSpace)
-    if op_ran_is_prod_space:
-        num_ran = op.range.size
-        n = [ran.size for ran in op.range]
-    else:
-        num_ran = 1
-        n = [op.range.size]
-
-    # Get the size of the domain, and handle ProductSpace
-    # Store for reuse in loop
-    op_dom_is_prod_space = isinstance(op.domain, ProductSpace)
-    if op_dom_is_prod_space:
-        num_dom = op.domain.size
-        m = [dom.size for dom in op.domain]
-    else:
-        num_dom = 1
-        m = [op.domain.size]
+             op.range.is_power_space and
+             all(isinstance(spc, TensorSpace) for spc in op.range))):
+        raise TypeError('operator range {!r} is neither `TensorSpace` '
+                        'nor `ProductSpace` with only equal `TensorSpace` '
+                        'components'.format(op.range))
 
     # Generate the matrix
     dtype = np.promote_types(op.domain.dtype, op.range.dtype)
-    matrix = np.zeros([np.sum(n), np.sum(m)], dtype=dtype)
+    matrix = np.zeros(op.range.shape + op.domain.shape, dtype=dtype)
     tmp_ran = op.range.element()  # Store for reuse in loop
     tmp_dom = op.domain.zero()  # Store for reuse in loop
-    index = 0
-    last_i = last_j = 0
 
-    for i in range(num_dom):
-        for j in range(m[i]):
-            if op_dom_is_prod_space:
-                tmp_dom[last_i][last_j] = 0.0
-                tmp_dom[i][j] = 1.0
-            else:
-                tmp_dom[last_j] = 0.0
-                tmp_dom[j] = 1.0
-            op(tmp_dom, out=tmp_ran)
-            if op_ran_is_prod_space:
-                tmp_idx = 0
-                for k in range(num_ran):
-                    matrix[tmp_idx: tmp_idx + op.range[k].size, index] = (
-                        as_flat_array(tmp_ran[k]))
-                    tmp_idx += op.range[k].size
-            else:
-                matrix[:, index] = as_flat_array(tmp_ran)
-            index += 1
-            last_j = j
-            last_i = i
+    for j in nd_iterator(op.domain.shape):
+        tmp_dom[j] = 1.0
+
+        op(tmp_dom, out=tmp_ran)
+        matrix[(Ellipsis,) + j] = tmp_ran.asarray()
+
+        tmp_dom[j] = 0.0
 
     return matrix
 
 
 def power_method_opnorm(op, xstart=None, maxiter=100, rtol=1e-05, atol=1e-08,
                         callback=None):
-    """Estimate the operator norm with the power method.
+    r"""Estimate the operator norm with the power method.
 
     Parameters
     ----------
@@ -122,8 +133,8 @@ def power_method_opnorm(op, xstart=None, maxiter=100, rtol=1e-05, atol=1e-08,
         `Operator.adjoint` must be defined (which implies that the
         operator must be linear).
     xstart : ``op.domain`` `element-like`, optional
-        Starting point of the iteration. By default, the ``one``
-        element of the `Operator.domain` is used.
+        Starting point of the iteration. By default an `Operator.domain`
+        element containing noise is used.
     maxiter : positive int, optional
         Number of iterations to perform. If the domain and range of ``op``
         do not match, it needs to be an even number. If ``None`` is given,
@@ -142,17 +153,13 @@ def power_method_opnorm(op, xstart=None, maxiter=100, rtol=1e-05, atol=1e-08,
 
     Examples
     --------
-    Verify that the identity operator has norm 1:
+    Verify that the identity operator has norm close to 1:
 
     >>> space = odl.uniform_discr(0, 1, 5)
     >>> id = odl.IdentityOperator(space)
-    >>> power_method_opnorm(id)
+    >>> estimation = power_method_opnorm(id)
+    >>> round(estimation, ndigits=3)
     1.0
-
-    The operator norm scales as expected:
-
-    >>> power_method_opnorm(3 * id)
-    3.0
 
     Notes
     -----
@@ -196,12 +203,7 @@ def power_method_opnorm(op, xstart=None, maxiter=100, rtol=1e-05, atol=1e-08,
 
     # Make sure starting point is ok or select initial guess
     if xstart is None:
-        try:
-            x = op.domain.one()  # TODO: random? better choice?
-        except AttributeError as exc:
-            raise_from(
-                ValueError('`xstart` must be defined in case the '
-                           'operator domain has no `one()`'), exc)
+        x = noise_element(op.domain)
     else:
         # copy to ensure xstart is not modified
         x = op.domain.element(xstart).copy()
@@ -245,7 +247,7 @@ def power_method_opnorm(op, xstart=None, maxiter=100, rtol=1e-05, atol=1e-08,
         # Calculate opnorm
         opnorm, opnorm_old = calc_opnorm(x_norm), opnorm
 
-        # Check if the breaking condition holds, stop. Else rescale and go on.
+        # If the breaking condition holds, stop. Else rescale and go on.
         if np.isclose(opnorm, opnorm_old, rtol, atol):
             break
         else:
@@ -279,17 +281,21 @@ def as_scipy_operator(op):
 
     >>> op = odl.IdentityOperator(odl.rn(3))
     >>> scipy_op = as_scipy_operator(op)
-    >>> import scipy.sparse.linalg as sl
-    >>> result, status = sl.cg(scipy_op, [0, 1, 0])
+    >>> import scipy.sparse.linalg as scipy_solvers
+    >>> result, status = scipy_solvers.cg(scipy_op, [0, 1, 0])
     >>> result
     array([ 0.,  1.,  0.])
 
     Notes
     -----
     If the data representation of ``op``'s domain and range is of type
-    `NumpyFn` this incurs no significant overhead. If the space type is
-    ``CudaFn`` or some other nonlocal type, the overhead is significant.
+    `NumpyTensorSpace` this incurs no significant overhead. If the space
+    type is ``CudaFn`` or some other nonlocal type, the overhead is
+    significant.
     """
+    # Lazy import to improve `import odl` time
+    import scipy.sparse
+
     if not op.is_linear:
         raise ValueError('`op` needs to be linear')
 
@@ -298,21 +304,14 @@ def as_scipy_operator(op):
         raise ValueError('dtypes of ``op.domain`` and ``op.range`` needs to '
                          'match')
 
-    def as_flat_array(arr):
-        if hasattr(arr, 'order'):
-            return arr.asarray().ravel(arr.order)
-        else:
-            return arr.asarray()
-
     shape = (native(op.range.size), native(op.domain.size))
 
     def matvec(v):
-        return as_flat_array(op(v))
+        return (op(v.reshape(op.domain.shape))).asarray().ravel()
 
     def rmatvec(v):
-        return as_flat_array(op.adjoint(v))
+        return (op.adjoint(v.reshape(op.range.shape))).asarray().ravel()
 
-    import scipy.sparse.linalg
     return scipy.sparse.linalg.LinearOperator(shape=shape,
                                               matvec=matvec,
                                               rmatvec=rmatvec,
@@ -363,28 +362,17 @@ def as_scipy_functional(func, return_gradient=False):
 
     Notes
     -----
-    If the data representation of ``op``'s domain is of type `NumpyFn` this
-    incurs no significant overhead. If the space type is ``CudaFn`` or some
-    other nonlocal type, the overhead is significant.
+    If the data representation of ``op``'s domain is of type
+    `NumpyTensorSpace`, this incurs no significant overhead. If the space type
+    is ``CudaFn`` or some other nonlocal type, the overhead is significant.
     """
-    def as_shaped_array(arr):
-        if hasattr(func.domain, 'order'):
-            return np.asarray(arr).reshape(func.domain.order)
-        else:
-            return np.asarray(arr)
-
-    def as_flat_array(vec):
-        if hasattr(vec, 'order'):
-            return np.asarray(vec).ravel(vec.order)
-        else:
-            return np.asarray(vec)
-
     def func_call(arr):
-        return func(as_shaped_array(arr))
+        return func(np.asarray(arr).reshape(func.domain.shape))
 
     if return_gradient:
         def func_gradient_call(arr):
-            return as_flat_array(func.gradient(as_shaped_array(arr)))
+            return np.asarray(
+                func.gradient(np.asarray(arr).reshape(func.domain.shape)))
 
         return func_call, func_gradient_call
     else:
@@ -396,6 +384,8 @@ def as_proximal_lang_operator(op, norm_bound=None):
 
     This is intended to be used with the `ProxImaL language solvers.
     <https://github.com/comp-imaging/proximal>`_
+
+    For documentation on the proximal language (ProxImaL) see [Hei+2016].
 
     Parameters
     ----------
@@ -414,14 +404,15 @@ def as_proximal_lang_operator(op, norm_bound=None):
     Notes
     -----
     If the data representation of ``op``'s domain and range is of type
-    `NumpyFn` this incurs no significant overhead. If the data space is
-    ``CudaFn`` or some other nonlocal type, the overhead is significant.
+    `NumpyTensorSpace` this incurs no significant overhead. If the data
+    space is implemented with CUDA or some other non-local representation,
+    the overhead is significant.
 
     References
     ----------
-    For documentation on the proximal language (ProxImaL) see [Hei+2016]_.
+    [Hei+2016] Heide, F et al. *ProxImaL: Efficient Image Optimization using
+    Proximal Algorithms*. ACM Transactions on Graphics (TOG), 2016.
     """
-
     # TODO: use out parameter once "as editable array" is added
 
     def forward(inp, out):
@@ -437,7 +428,7 @@ def as_proximal_lang_operator(op, norm_bound=None):
                                  adjoint=adjoint,
                                  norm_bound=norm_bound)
 
+
 if __name__ == '__main__':
-    # pylint: disable=wrong-import-position
     from odl.util.testutils import run_doctests
     run_doctests()

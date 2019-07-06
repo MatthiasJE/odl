@@ -12,12 +12,10 @@ Then, the same file is read again using a file specification and the
 sequence of dictionaries with a certain structure.
 """
 
-from __future__ import print_function
-
 from collections import OrderedDict
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy
+import scipy.misc
 import tempfile
 
 from odl.contrib.mrc import (

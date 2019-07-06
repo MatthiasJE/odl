@@ -39,7 +39,7 @@ data_matching = 'exact'
 
 # --- Create spaces, forward operator and simulated data ---
 
-# Discrete reconstruction space: discretized functions on the rectangle
+# Reconstruction space: discretized functions on the rectangle
 # [-20, 20]^2 with 512 samples per dimension.
 space = odl.uniform_discr(min_pt=[-20, -20], max_pt=[20, 20], shape=[512, 512])
 
@@ -103,7 +103,7 @@ lin_ops = [ray_trafo, gradient]
 g = [indicator_data, cross_norm]
 
 # Create callback that prints the iteration number and shows partial results
-callback = (odl.solvers.CallbackShow('iterates', step=5, clim=[0, 1]) &
+callback = (odl.solvers.CallbackShow('Iterates', step=5, clim=[0, 1]) &
             odl.solvers.CallbackPrintIteration())
 
 # Solve with initial guess x = 0.
@@ -116,6 +116,6 @@ odl.solvers.douglas_rachford_pd(x, f, g, lin_ops,
 
 # Compare with filtered back-projection
 fbp_recon = odl.tomo.fbp_op(ray_trafo)(data)
-fbp_recon.show('FBP reconstruction')
+fbp_recon.show('FBP Reconstruction')
 phantom.show('Phantom')
-data.show('Sinogram')
+data.show('Sinogram', force_show=True)

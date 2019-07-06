@@ -1,4 +1,4 @@
-# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2018 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -8,26 +8,19 @@
 
 """Step length computation for optimization schemes."""
 
-# Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
-from future import standard_library
-standard_library.install_aliases()
-
-from abc import ABCMeta, abstractmethod
+from builtins import object
 import numpy as np
-
-from odl.util.utility import with_metaclass
 
 
 __all__ = ('LineSearch', 'BacktrackingLineSearch', 'ConstantLineSearch',
            'LineSearchFromIterNum')
 
 
-class LineSearch(with_metaclass(ABCMeta, object)):
+class LineSearch(object):
 
     """Abstract base class for line search step length methods."""
 
-    @abstractmethod
     def __call__(self, x, direction, dir_derivative):
         """Calculate step length in direction.
 
@@ -45,6 +38,7 @@ class LineSearch(with_metaclass(ABCMeta, object)):
         step : float
             Computed step length.
         """
+        raise NotImplementedError('abstract method')
 
 
 class BacktrackingLineSearch(LineSearch):
@@ -54,12 +48,20 @@ class BacktrackingLineSearch(LineSearch):
     This methods approximately finds the longest step length fulfilling
     the Armijo-Goldstein condition.
 
-    The line search algorithm is described in [BV2004]_, page 464
+    The line search algorithm is described in [BV2004], page 464
     (`book available online
     <http://stanford.edu/~boyd/cvxbook/bv_cvxbook.pdf>`_) and
-    [GNS2009]_, pages 378--379. See also
+    [GNS2009], pages 378--379. See also
     `Backtracking_line_search
     <https://en.wikipedia.org/wiki/Backtracking_line_search>`_.
+
+    References
+    ----------
+    [BV2004] Boyd, S, and Vandenberghe, L. *Convex optimization*.
+    Cambridge university press, 2004.
+
+    [GNS2009] Griva, I, Nash, S G, and Sofer, A. *Linear and nonlinear
+    optimization*. Siam, 2009.
     """
 
     def __init__(self, function, tau=0.5, discount=0.01, alpha=1.0,
@@ -70,7 +72,8 @@ class BacktrackingLineSearch(LineSearch):
         ----------
         function : callable
             The cost function of the optimization problem to be solved.
-            If function is not a `Functional`, the argument `dir_derivative`
+            If ``function`` is not a `Functional`, calling this class later
+            requires a value for the ``dir_derivative`` argument.
         tau : float, optional
             The amount the step length is decreased in each iteration,
             as long as it does not fulfill the decrease condition.
@@ -287,6 +290,5 @@ class LineSearchFromIterNum(LineSearch):
 
 
 if __name__ == '__main__':
-    # pylint: disable=wrong-import-position
     from odl.util.testutils import run_doctests
     run_doctests()

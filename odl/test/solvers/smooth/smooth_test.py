@@ -19,12 +19,10 @@ nonlinear_cg_beta = odl.util.testutils.simple_fixture('nonlinear_cg_beta',
 
 
 @pytest.fixture(scope="module", params=['l2_squared', 'l2_squared_scaled',
-                                        'rosenbrock'])
+                                        'rosenbrock', 'quadratic_form'])
 def functional(request):
     """functional with optimum 0 at 0."""
     name = request.param
-
-    # TODO: quadratic (#606) functionals
 
     if name == 'l2_squared':
         space = odl.rn(3)
@@ -34,6 +32,19 @@ def functional(request):
         scaling = odl.MultiplyOperator(space.element([1, 2, 3]),
                                        domain=space)
         return odl.solvers.L2NormSquared(space) * scaling
+    elif name == 'quadratic_form':
+        space = odl.rn(3)
+        # Symmetric and diagonally dominant matrix
+        matrix = odl.MatrixOperator([[7.0, 1, 2],
+                                     [1, 5, -3],
+                                     [2, -3, 8]])
+        vector = space.element([1, 2, 3])
+
+        # Calibrate so that functional is zero in optimal point
+        constant = 1 / 4 * vector.inner(matrix.inverse(vector))
+
+        return odl.solvers.QuadraticForm(
+            operator=matrix, vector=vector, constant=constant)
     elif name == 'rosenbrock':
         # Moderately ill-behaved rosenbrock functional.
         rosenbrock = odl.solvers.RosenbrockFunctional(odl.rn(2), scale=2)
@@ -84,7 +95,7 @@ def test_bfgs_solver(functional_and_linesearch):
     functional, line_search = functional_and_linesearch
 
     x = functional.domain.one()
-    odl.solvers.bfgs_method(functional, x, tol=1e-6,
+    odl.solvers.bfgs_method(functional, x, tol=1e-3,
                             line_search=line_search)
 
     assert functional(x) < 1e-3
@@ -95,7 +106,7 @@ def test_lbfgs_solver(functional_and_linesearch):
     functional, line_search = functional_and_linesearch
 
     x = functional.domain.one()
-    odl.solvers.bfgs_method(functional, x, tol=1e-6,
+    odl.solvers.bfgs_method(functional, x, tol=1e-3,
                             line_search=line_search, num_store=5)
 
     assert functional(x) < 1e-3
@@ -106,7 +117,7 @@ def test_broydens_method(broyden_impl, functional_and_linesearch):
     functional, line_search = functional_and_linesearch
 
     x = functional.domain.one()
-    odl.solvers.broydens_method(functional, x, tol=1e-6,
+    odl.solvers.broydens_method(functional, x, tol=1e-3,
                                 line_search=line_search, impl=broyden_impl)
 
     assert functional(x) < 1e-3
@@ -117,8 +128,17 @@ def test_steepest_descent(functional):
     line_search = odl.solvers.BacktrackingLineSearch(functional)
 
     x = functional.domain.one()
-    odl.solvers.steepest_descent(functional, x, tol=1e-6,
+    odl.solvers.steepest_descent(functional, x, tol=1e-3,
                                  line_search=line_search)
+
+    assert functional(x) < 1e-3
+
+
+def test_adam(functional):
+    """Test the ``adam`` solver."""
+
+    x = functional.domain.one()
+    odl.solvers.adam(functional, x, tol=1e-2, learning_rate=0.5)
 
     assert functional(x) < 1e-3
 
@@ -128,7 +148,7 @@ def test_conjguate_gradient_nonlinear(functional, nonlinear_cg_beta):
     line_search = odl.solvers.BacktrackingLineSearch(functional)
 
     x = functional.domain.one()
-    odl.solvers.conjugate_gradient_nonlinear(functional, x, tol=1e-6,
+    odl.solvers.conjugate_gradient_nonlinear(functional, x, tol=1e-3,
                                              line_search=line_search,
                                              beta_method=nonlinear_cg_beta)
 
@@ -136,4 +156,4 @@ def test_conjguate_gradient_nonlinear(functional, nonlinear_cg_beta):
 
 
 if __name__ == '__main__':
-    pytest.main([str(__file__.replace('\\', '/')), '-v'])
+    odl.util.test_file(__file__)

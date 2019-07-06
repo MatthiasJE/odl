@@ -1,4 +1,4 @@
-﻿# Copyright 2014-2017 The ODL contributors
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -8,15 +8,9 @@
 
 """Default operators defined on any `ProductSpace`."""
 
-# Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
-from future import standard_library
-standard_library.install_aliases()
-from builtins import super
-
-import numpy as np
-import scipy as sp
 from numbers import Integral
+import numpy as np
 
 from odl.operator.operator import Operator
 from odl.operator.default_ops import ZeroOperator
@@ -30,7 +24,7 @@ __all__ = ('ProductSpaceOperator',
 
 class ProductSpaceOperator(Operator):
 
-    """A "matrix of operators" on product spaces.
+    r"""A "matrix of operators" on product spaces.
 
     For example a matrix of operators can act on a vector by
 
@@ -43,43 +37,43 @@ class ProductSpaceOperator(Operator):
     as a linear combination of "sub-operators", e.g.
 
     .. math::
-        \\left(
-        \\begin{array}{ccc}
-        A & B & 0 \\\\
-        0 & C & 0 \\\\
+        \left(
+        \begin{array}{ccc}
+        A & B & 0 \\
+        0 & C & 0 \\
         0 & 0 & D
-        \end{array}\\right)
-        \\left(
-        \\begin{array}{c}
-        x \\\\
-        y \\\\
+        \end{array}\right)
+        \left(
+        \begin{array}{c}
+        x \\
+        y \\
         z
-        \end{array}\\right)
+        \end{array}\right)
         =
-        \\left(
-        \\begin{array}{c}
-        A(x) + B(y) \\\\
-        C(y) \\\\
+        \left(
+        \begin{array}{c}
+        A(x) + B(y) \\
+        C(y) \\
         D(z)
-        \end{array}\\right)
+        \end{array}\right)
 
     Mathematically, a `ProductSpaceOperator` is an operator
 
     .. math::
-        \mathcal{A}: \mathcal{X} \\to \mathcal{Y}
+        \mathcal{A}: \mathcal{X} \to \mathcal{Y}
 
     between product spaces
-    :math:`\mathcal{X}=\mathcal{X}_1 \\times\dots\\times \mathcal{X}_m`
+    :math:`\mathcal{X}=\mathcal{X}_1 \times\dots\times \mathcal{X}_m`
     and
-    :math:`\mathcal{Y}=\mathcal{Y}_1 \\times\dots\\times \mathcal{Y}_n`
+    :math:`\mathcal{Y}=\mathcal{Y}_1 \times\dots\times \mathcal{Y}_n`
     which can be written in the form
 
     .. math::
         \mathcal{A} = (\mathcal{A}_{ij})_{i,j},  \quad
-                          i = 1, \dots, n, \\ j = 1, \dots, m
+                          i = 1, \dots, n, \ j = 1, \dots, m
 
     with *component operators*
-    :math:`\mathcal{A}_{ij}: \mathcal{X}_j \\to \mathcal{Y}_i`.
+    :math:`\mathcal{A}_{ij}: \mathcal{X}_j \to \mathcal{Y}_i`.
 
     Its action on a vector :math:`x = (x_1, \dots, x_m)` is defined as
     the matrix multiplication
@@ -100,7 +94,7 @@ class ProductSpaceOperator(Operator):
         Parameters
         ----------
         operators : `array-like`
-            An array of `Operator`'s
+            An array of `Operator`'s, must be 2-dimensional.
         domain : `ProductSpace`, optional
             Domain of the operator. If not provided, it is tried to be
             inferred from the operators. This requires each **column**
@@ -113,37 +107,50 @@ class ProductSpaceOperator(Operator):
         Examples
         --------
         >>> r3 = odl.rn(3)
-        >>> X = odl.ProductSpace(r3, r3)
+        >>> pspace = odl.ProductSpace(r3, r3)
         >>> I = odl.IdentityOperator(r3)
-        >>> x = X.element([[1, 2, 3], [4, 5, 6]])
+        >>> x = pspace.element([[1, 2, 3],
+        ...                     [4, 5, 6]])
 
-        Sum of elements:
+        Create an operator that sums two inputs:
 
-        >>> prod_op = ProductSpaceOperator([I, I])
+        >>> prod_op = odl.ProductSpaceOperator([[I, I]])
         >>> prod_op(x)
         ProductSpace(rn(3), 1).element([
-            [5.0, 7.0, 9.0]
+            [ 5.,  7.,  9.]
         ])
 
         Diagonal operator -- 0 or ``None`` means ignore, or the implicit
         zero operator:
 
-        >>> prod_op = ProductSpaceOperator([[I, 0], [0, I]])
+        >>> prod_op = odl.ProductSpaceOperator([[I, 0],
+        ...                                     [0, I]])
         >>> prod_op(x)
         ProductSpace(rn(3), 2).element([
-            [1.0, 2.0, 3.0],
-            [4.0, 5.0, 6.0]
+            [ 1.,  2.,  3.],
+            [ 4.,  5.,  6.]
         ])
 
-        Complicated combinations:
+        If a column is empty, the operator domain must be specified. The
+        same holds for an empty row and the range of the operator:
 
-        >>> prod_op = ProductSpaceOperator([[I, I], [I, 0]])
+        >>> prod_op = odl.ProductSpaceOperator([[I, 0],
+        ...                                     [I, 0]], domain=r3 ** 2)
         >>> prod_op(x)
         ProductSpace(rn(3), 2).element([
-            [5.0, 7.0, 9.0],
-            [1.0, 2.0, 3.0]
+            [ 1.,  2.,  3.],
+            [ 1.,  2.,  3.]
+        ])
+        >>> prod_op = odl.ProductSpaceOperator([[I, I],
+        ...                                     [0, 0]], range=r3 ** 2)
+        >>> prod_op(x)
+        ProductSpace(rn(3), 2).element([
+            [ 5.,  7.,  9.],
+            [ 0.,  0.,  0.]
         ])
         """
+        # Lazy import to improve `import odl` time
+        import scipy.sparse
 
         # Validate input data
         if domain is not None:
@@ -160,25 +167,27 @@ class ProductSpaceOperator(Operator):
             if range.is_weighted:
                 raise NotImplementedError('weighted spaces not supported')
 
-        # Convert ops to sparse representation
-        self.ops = sp.sparse.coo_matrix(operators)
-
-        if not all(isinstance(op, Operator) for op in self.ops.data):
-            raise TypeError('`operators` {!r} must be a matrix of Operators'
-                            ''.format(operators))
+        if isinstance(operators, scipy.sparse.spmatrix):
+            if not all(isinstance(op, Operator) for op in operators.data):
+                raise ValueError('sparse matrix `operator` contains non-'
+                                 '`Operator` entries')
+            self.__ops = operators
+        else:
+            self.__ops = self._convert_to_spmatrix(operators)
 
         # Set domain and range (or verify if given)
         if domain is None:
-            domains = [None] * self.ops.shape[1]
+            domains = [None] * self.__ops.shape[1]
         else:
             domains = domain
 
         if range is None:
-            ranges = [None] * self.ops.shape[0]
+            ranges = [None] * self.__ops.shape[0]
         else:
             ranges = range
 
-        for row, col, op in zip(self.ops.row, self.ops.col, self.ops.data):
+        for row, col, op in zip(self.__ops.row, self.__ops.col,
+                                self.__ops.data):
             if domains[col] is None:
                 domains[col] = op.domain
             elif domains[col] != op.domain:
@@ -212,9 +221,71 @@ class ProductSpaceOperator(Operator):
             range = ProductSpace(*ranges)
 
         # Set linearity
-        linear = all(op.is_linear for op in self.ops.data)
+        linear = all(op.is_linear for op in self.__ops.data)
 
-        super().__init__(domain=domain, range=range, linear=linear)
+        super(ProductSpaceOperator, self).__init__(
+            domain=domain, range=range, linear=linear)
+
+    @staticmethod
+    def _convert_to_spmatrix(operators):
+        """Convert an array-like object of operators to a sparse matrix."""
+        # Lazy import to improve `import odl` time
+        import scipy.sparse
+
+        # Convert ops to sparse representation. This is not trivial because
+        # operators can be indexable themselves and give the wrong impression
+        # of an extra dimension. So we have to infer the shape manually
+        # first and extract the indices of nonzero positions.
+        nrows = len(operators)
+        ncols = None
+        irow, icol, data = [], [], []
+        for i, row in enumerate(operators):
+            try:
+                iter(row)
+            except TypeError:
+                raise ValueError(
+                    '`operators` must be a matrix of `Operator` objects, `0` '
+                    'or `None`, got {!r} (row {} = {!r} is not iterable)'
+                    ''.format(operators, i, row))
+
+            if isinstance(row, Operator):
+                raise ValueError(
+                    '`operators` must be a matrix of `Operator` objects, `0` '
+                    'or `None`, but row {} is an `Operator` {!r}'
+                    ''.format(i, row))
+
+            if ncols is None:
+                ncols = len(row)
+            elif len(row) != ncols:
+                raise ValueError(
+                    'all rows in `operators` must have the same length, but '
+                    'length {} of row {} differs from previous common length '
+                    '{}'.format(len(row), i, ncols))
+
+            for j, col in enumerate(row):
+                if col is None or col is 0:
+                    pass
+                elif isinstance(col, Operator):
+                    irow.append(i)
+                    icol.append(j)
+                    data.append(col)
+                else:
+                    raise ValueError(
+                        '`operators` must be a matrix of `Operator` objects, '
+                        '`0` or `None`, got entry {!r} at ({}, {})'
+                        ''.format(col, i, j))
+
+        # Create object array explicitly, threby avoiding erroneous conversion
+        # in `coo_matrix.__init__`
+        data_arr = np.empty(len(data), dtype=object)
+        data_arr[:] = data
+        return scipy.sparse.coo_matrix((data_arr, (irow, icol)),
+                                       shape=(nrows, ncols))
+
+    @property
+    def ops(self):
+        """The sparse operator matrix representing this operator."""
+        return self.__ops
 
     def _call(self, x, out=None):
         """Call the operators on the parts of ``x``."""
@@ -225,7 +296,7 @@ class ProductSpaceOperator(Operator):
             for i, j, op in zip(self.ops.row, self.ops.col, self.ops.data):
                 out[i] += op(x[j])
         else:
-            has_evaluated_row = np.zeros(self.range.size, dtype=bool)
+            has_evaluated_row = np.zeros(len(self.range), dtype=bool)
             for i, j, op in zip(self.ops.row, self.ops.col, self.ops.data):
                 if not has_evaluated_row[i]:
                     op(x[j], out=out[i])
@@ -257,56 +328,61 @@ class ProductSpaceOperator(Operator):
         Examples
         --------
         >>> r3 = odl.rn(3)
-        >>> X = odl.ProductSpace(r3, r3)
+        >>> pspace = odl.ProductSpace(r3, r3)
         >>> I = odl.IdentityOperator(r3)
-        >>> x = X.element([[1, 2, 3], [4, 5, 6]])
+        >>> x = pspace.element([[1, 2, 3], [4, 5, 6]])
 
         Example with linear operator (derivative is itself)
 
         >>> prod_op = ProductSpaceOperator([[0, I], [0, 0]],
-        ...                                domain=X, range=X)
+        ...                                domain=pspace, range=pspace)
         >>> prod_op(x)
         ProductSpace(rn(3), 2).element([
-            [4.0, 5.0, 6.0],
-            [0.0, 0.0, 0.0]
+            [ 4.,  5.,  6.],
+            [ 0.,  0.,  0.]
         ])
         >>> prod_op.derivative(x)(x)
         ProductSpace(rn(3), 2).element([
-            [4.0, 5.0, 6.0],
-            [0.0, 0.0, 0.0]
+            [ 4.,  5.,  6.],
+            [ 0.,  0.,  0.]
         ])
 
         Example with affine operator
 
         >>> residual_op = I - r3.element([1, 1, 1])
         >>> op = ProductSpaceOperator([[0, residual_op], [0, 0]],
-        ...                           domain=X, range=X)
+        ...                           domain=pspace, range=pspace)
 
         Calling operator gives offset by [1, 1, 1]
 
         >>> op(x)
         ProductSpace(rn(3), 2).element([
-            [3.0, 4.0, 5.0],
-            [0.0, 0.0, 0.0]
+            [ 3.,  4.,  5.],
+            [ 0.,  0.,  0.]
         ])
 
         Derivative of affine operator does not have this offset
 
         >>> op.derivative(x)(x)
         ProductSpace(rn(3), 2).element([
-            [4.0, 5.0, 6.0],
-            [0.0, 0.0, 0.0]
+            [ 4.,  5.,  6.],
+            [ 0.,  0.,  0.]
         ])
         """
+        # Lazy import to improve `import odl` time
+        import scipy.sparse
+
         # Short circuit optimization
         if self.is_linear:
             return self
 
         deriv_ops = [op.derivative(x[col]) for op, col in zip(self.ops.data,
                                                               self.ops.col)]
+        data = np.empty(len(deriv_ops), dtype=object)
+        data[:] = deriv_ops
         indices = [self.ops.row, self.ops.col]
         shape = self.ops.shape
-        deriv_matrix = sp.sparse.coo_matrix((deriv_ops, indices), shape)
+        deriv_matrix = scipy.sparse.coo_matrix((data, indices), shape)
         return ProductSpaceOperator(deriv_matrix, self.domain, self.range)
 
     @property
@@ -327,29 +403,35 @@ class ProductSpaceOperator(Operator):
         Examples
         --------
         >>> r3 = odl.rn(3)
-        >>> X = odl.ProductSpace(r3, r3)
+        >>> pspace = odl.ProductSpace(r3, r3)
         >>> I = odl.IdentityOperator(r3)
-        >>> x = X.element([[1, 2, 3], [4, 5, 6]])
+        >>> x = pspace.element([[1, 2, 3],
+        ...                     [4, 5, 6]])
 
         Matrix is transposed:
 
         >>> prod_op = ProductSpaceOperator([[0, I], [0, 0]],
-        ...                                domain=X, range=X)
+        ...                                domain=pspace, range=pspace)
         >>> prod_op(x)
         ProductSpace(rn(3), 2).element([
-            [4.0, 5.0, 6.0],
-            [0.0, 0.0, 0.0]
+            [ 4.,  5.,  6.],
+            [ 0.,  0.,  0.]
         ])
         >>> prod_op.adjoint(x)
         ProductSpace(rn(3), 2).element([
-            [0.0, 0.0, 0.0],
-            [1.0, 2.0, 3.0]
+            [ 0.,  0.,  0.],
+            [ 1.,  2.,  3.]
         ])
         """
+        # Lazy import to improve `import odl` time
+        import scipy.sparse
+
         adjoint_ops = [op.adjoint for op in self.ops.data]
+        data = np.empty(len(adjoint_ops), dtype=object)
+        data[:] = adjoint_ops
         indices = [self.ops.col, self.ops.row]  # Swap col/row -> transpose
         shape = (self.ops.shape[1], self.ops.shape[0])
-        adj_matrix = sp.sparse.coo_matrix((adjoint_ops, indices), shape)
+        adj_matrix = scipy.sparse.coo_matrix((data, indices), shape)
         return ProductSpaceOperator(adj_matrix, self.range, self.domain)
 
     def __getitem__(self, index):
@@ -427,11 +509,11 @@ class ProductSpaceOperator(Operator):
     @property
     def size(self):
         """Total size of the matrix of operators."""
-        return np.prod(self.shape)
+        return np.prod(self.shape, dtype='int64')
 
     def __repr__(self):
         """Return ``repr(self)``."""
-        aslist = [[0] * self.domain.size for _ in range(self.range.size)]
+        aslist = [[0] * len(self.domain) for _ in range(len(self.range))]
         for i, j, op in zip(self.ops.row, self.ops.col, self.ops.data):
             aslist[i][j] = op
         return '{}({!r})'.format(self.__class__.__name__, aslist)
@@ -439,20 +521,20 @@ class ProductSpaceOperator(Operator):
 
 class ComponentProjection(Operator):
 
-    """Projection onto the subspace identified by an index.
+    r"""Projection onto the subspace identified by an index.
 
-    For a product space :math:`\mathcal{X} = \mathcal{X}_1 \\times \dots
-    \\times \mathcal{X}_n`, the component projection
+    For a product space :math:`\mathcal{X} = \mathcal{X}_1 \times \dots
+    \times \mathcal{X}_n`, the component projection
 
     .. math::
-       \mathcal{P}_i: \mathcal{X} \\to \mathcal{X}_i
+       \mathcal{P}_i: \mathcal{X} \to \mathcal{X}_i
 
     is given by :math:`\mathcal{P}_i(x) = x_i` for an element
-    :math:`x = (x_1, \dots, x_n) \\in \mathcal{X}`.
+    :math:`x = (x_1, \dots, x_n) \in \mathcal{X}`.
 
     More generally, for an index set :math:`I \subset \{1, \dots, n\}`,
     the projection operator :math:`\mathcal{P}_I` is defined by
-    :math:`\mathcal{P}_I(x) = (x_i)_{i \\in I}`.
+    :math:`\mathcal{P}_I(x) = (x_i)_{i \in I}`.
 
     Note that this is a special case of a product space operator where
     the "operator matrix" has only one row and contains only
@@ -475,28 +557,29 @@ class ComponentProjection(Operator):
         >>> r1 = odl.rn(1)
         >>> r2 = odl.rn(2)
         >>> r3 = odl.rn(3)
-        >>> X = odl.ProductSpace(r1, r2, r3)
+        >>> pspace = odl.ProductSpace(r1, r2, r3)
 
         Projection on n-th component:
 
-        >>> proj = odl.ComponentProjection(X, 0)
-        >>> x = [[1.0],
-        ...      [2.0, 3.0],
-        ...      [4.0, 5.0, 6.0]]
+        >>> proj = odl.ComponentProjection(pspace, 0)
+        >>> x = [[1],
+        ...      [2, 3],
+        ...      [4, 5, 6]]
         >>> proj(x)
-        rn(1).element([1.0])
+        rn(1).element([ 1.])
 
         Projection on sub-space:
 
-        >>> proj = odl.ComponentProjection(X, [0, 2])
+        >>> proj = odl.ComponentProjection(pspace, [0, 2])
         >>> proj(x)
         ProductSpace(rn(1), rn(3)).element([
-            [1.0],
-            [4.0, 5.0, 6.0]
+            [ 1.],
+            [ 4.,  5.,  6.]
         ])
         """
         self.__index = index
-        super().__init__(space, space[index], linear=True)
+        super(ComponentProjection, self).__init__(
+            space, space[index], linear=True)
 
     @property
     def index(self):
@@ -529,8 +612,8 @@ class ComponentProjection(Operator):
 
         Examples
         --------
-        >>> X = odl.ProductSpace(odl.rn(1), odl.rn(2))
-        >>> odl.ComponentProjection(X, 0)
+        >>> pspace = odl.ProductSpace(odl.rn(1), odl.rn(2))
+        >>> odl.ComponentProjection(pspace, 0)
         ComponentProjection(ProductSpace(rn(1), rn(2)), 0)
         """
         return '{}({!r}, {})'.format(self.__class__.__name__,
@@ -565,31 +648,34 @@ class ComponentProjectionAdjoint(Operator):
         >>> r1 = odl.rn(1)
         >>> r2 = odl.rn(2)
         >>> r3 = odl.rn(3)
-        >>> X = odl.ProductSpace(r1, r2, r3)
-        >>> x = X.element([[1], [2, 3], [4, 5, 6]])
+        >>> pspace = odl.ProductSpace(r1, r2, r3)
+        >>> x = pspace.element([[1],
+        ...                     [2, 3],
+        ...                     [4, 5, 6]])
 
         Projection on the 0-th component:
 
-        >>> proj_adj = odl.ComponentProjectionAdjoint(X, 0)
+        >>> proj_adj = odl.ComponentProjectionAdjoint(pspace, 0)
         >>> proj_adj(x[0])
         ProductSpace(rn(1), rn(2), rn(3)).element([
-            [1.0],
-            [0.0, 0.0],
-            [0.0, 0.0, 0.0]
+            [ 1.],
+            [ 0.,  0.],
+            [ 0.,  0.,  0.]
         ])
 
         Projection on a sub-space corresponding to indices 0 and 2:
 
-        >>> proj_adj = odl.ComponentProjectionAdjoint(X, [0, 2])
+        >>> proj_adj = odl.ComponentProjectionAdjoint(pspace, [0, 2])
         >>> proj_adj(x[[0, 2]])
         ProductSpace(rn(1), rn(2), rn(3)).element([
-            [1.0],
-            [0.0, 0.0],
-            [4.0, 5.0, 6.0]
+            [ 1.],
+            [ 0.,  0.],
+            [ 4.,  5.,  6.]
         ])
         """
         self.__index = index
-        super().__init__(space[index], space, linear=True)
+        super(ComponentProjectionAdjoint, self).__init__(
+            space[index], space, linear=True)
 
     @property
     def index(self):
@@ -623,8 +709,8 @@ class ComponentProjectionAdjoint(Operator):
 
         Examples
         --------
-        >>> X = odl.ProductSpace(odl.rn(1), odl.rn(2))
-        >>> odl.ComponentProjectionAdjoint(X, 0)
+        >>> pspace = odl.ProductSpace(odl.rn(1), odl.rn(2))
+        >>> odl.ComponentProjectionAdjoint(pspace, 0)
         ComponentProjectionAdjoint(ProductSpace(rn(1), rn(2)), 0)
         """
         return '{}({!r}, {})'.format(self.__class__.__name__,
@@ -671,8 +757,8 @@ class BroadcastOperator(Operator):
         >>> x = [1, 2, 3]
         >>> op(x)
         ProductSpace(rn(3), 2).element([
-            [1.0, 2.0, 3.0],
-            [2.0, 4.0, 6.0]
+            [ 1.,  2.,  3.],
+            [ 2.,  4.,  6.]
         ])
 
         Can also initialize by calling an operator repeatedly:
@@ -689,10 +775,9 @@ class BroadcastOperator(Operator):
 
         self.__operators = operators
         self.__prod_op = ProductSpaceOperator([[op] for op in operators])
-
-        super().__init__(self.prod_op.domain[0],
-                         self.prod_op.range,
-                         self.prod_op.is_linear)
+        super(BroadcastOperator, self).__init__(
+            self.prod_op.domain[0], self.prod_op.range,
+            linear=self.prod_op.is_linear)
 
     @property
     def prod_op(self):
@@ -748,16 +833,16 @@ class BroadcastOperator(Operator):
         >>> x = [1, 2, 3]
         >>> op(x)
         ProductSpace(rn(3), 2).element([
-            [0.0, 1.0, 2.0],
-            [0.0, 2.0, 4.0]
+            [ 0.,  1.,  2.],
+            [ 0.,  2.,  4.]
         ])
 
         The derivative of this affine operator does not have an offset:
 
         >>> op.derivative(x)(x)
         ProductSpace(rn(3), 2).element([
-            [1.0, 2.0, 3.0],
-            [2.0, 4.0, 6.0]
+            [ 1.,  2.,  3.],
+            [ 2.,  4.,  6.]
         ])
         """
         return BroadcastOperator(*[op.derivative(x) for op in
@@ -776,7 +861,7 @@ class BroadcastOperator(Operator):
         >>> I = odl.IdentityOperator(odl.rn(3))
         >>> op = BroadcastOperator(I, 2 * I)
         >>> op.adjoint([[1, 2, 3], [2, 3, 4]])
-        rn(3).element([5.0, 8.0, 11.0])
+        rn(3).element([  5.,   8.,  11.])
         """
         return ReductionOperator(*[op.adjoint for op in self.operators])
 
@@ -814,6 +899,7 @@ class ReductionOperator(Operator):
     ProductSpaceOperator : More general case, used as backend.
     BroadcastOperator : Calls several operators with same argument.
     DiagonalOperator : Case where each operator should have its own argument.
+    SeparableSum : Corresponding construction for functionals.
     """
     def __init__(self, *operators):
         """Initialize a new instance.
@@ -837,17 +923,17 @@ class ReductionOperator(Operator):
         Evaluating in a point gives the sum of the evaluation results of
         the individual operators:
 
-        >>> op([[1.0, 2.0, 3.0],
-        ...     [4.0, 6.0, 8.0]])
-        rn(3).element([9.0, 14.0, 19.0])
+        >>> op([[1, 2, 3],
+        ...     [4, 6, 8]])
+        rn(3).element([  9.,  14.,  19.])
 
         An ``out`` argument can be given for in-place evaluation:
 
         >>> out = op.range.element()
-        >>> result = op([[1.0, 2.0, 3.0],
-        ...              [4.0, 6.0, 8.0]], out=out)
+        >>> result = op([[1, 2, 3],
+        ...              [4, 6, 8]], out=out)
         >>> out
-        rn(3).element([9.0, 14.0, 19.0])
+        rn(3).element([  9.,  14.,  19.])
         >>> result is out
         True
 
@@ -866,9 +952,9 @@ class ReductionOperator(Operator):
         self.__operators = operators
         self.__prod_op = ProductSpaceOperator([operators])
 
-        super().__init__(self.prod_op.domain,
-                         self.prod_op.range[0],
-                         self.prod_op.is_linear)
+        super(ReductionOperator, self).__init__(
+            self.prod_op.domain, self.prod_op.range[0],
+            linear=self.prod_op.is_linear)
 
     @property
     def prod_op(self):
@@ -925,9 +1011,9 @@ class ReductionOperator(Operator):
 
         >>> op = ReductionOperator(I, 2 * I)
         >>> op([x, y])
-        rn(3).element([9.0, 14.0, 19.0])
+        rn(3).element([  9.,  14.,  19.])
         >>> op.derivative([x, y])([x, y])
-        rn(3).element([9.0, 14.0, 19.0])
+        rn(3).element([  9.,  14.,  19.])
 
         Example with affine operator
 
@@ -937,12 +1023,12 @@ class ReductionOperator(Operator):
         Calling operator gives offset by [3, 3, 3]
 
         >>> op([x, y])
-        rn(3).element([6.0, 11.0, 16.0])
+        rn(3).element([  6.,  11.,  16.])
 
         Derivative of affine operator does not have this offset
 
         >>> op.derivative([x, y])([x, y])
-        rn(3).element([9.0, 14.0, 19.0])
+        rn(3).element([  9.,  14.,  19.])
         """
         return ReductionOperator(*[op.derivative(xi)
                                    for op, xi in zip(self.operators, x)])
@@ -961,8 +1047,8 @@ class ReductionOperator(Operator):
         >>> op = ReductionOperator(I, 2 * I)
         >>> op.adjoint([1, 2, 3])
         ProductSpace(rn(3), 2).element([
-            [1.0, 2.0, 3.0],
-            [2.0, 4.0, 6.0]
+            [ 1.,  2.,  3.],
+            [ 2.,  4.,  6.]
         ])
         """
         return BroadcastOperator(*[op.adjoint for op in self.operators])
@@ -999,7 +1085,7 @@ class DiagonalOperator(ProductSpaceOperator):
 
     When evaluated it gives::
 
-         DiagonalOperator(op1, op2)(x) = [op1(x), op2(x)]
+         DiagonalOperator(op1, op2)(x) = [op1(x[0]), op2(x[1])]
 
     See Also
     --------
@@ -1036,8 +1122,8 @@ class DiagonalOperator(ProductSpaceOperator):
         >>> op([[1, 2, 3],
         ...     [4, 5, 6]])
         ProductSpace(rn(3), 2).element([
-            [1.0, 2.0, 3.0],
-            [8.0, 10.0, 12.0]
+            [ 1.,  2.,  3.],
+            [  8.,  10.,  12.]
         ])
 
         Can also be created using a multiple of a single operator
@@ -1046,18 +1132,23 @@ class DiagonalOperator(ProductSpaceOperator):
         >>> op.operators
         (IdentityOperator(rn(3)), IdentityOperator(rn(3)))
         """
+        # Lazy import to improve `import odl` time
+        import scipy.sparse
+
         if (len(operators) == 2 and
                 isinstance(operators[0], Operator) and
                 isinstance(operators[1], Integral)):
             operators = (operators[0],) * operators[1]
 
-        indices = [range(len(operators)), range(len(operators))]
-        shape = (len(operators), len(operators))
-        op_matrix = sp.sparse.coo_matrix((operators, indices), shape)
+        n_ops = len(operators)
+        irow = icol = np.arange(n_ops)
+        data = np.empty(n_ops, dtype=object)
+        data[:] = operators
+        shape = (n_ops, n_ops)
+        op_matrix = scipy.sparse.coo_matrix((data, (irow, icol)), shape)
+        super(DiagonalOperator, self).__init__(op_matrix, **kwargs)
 
         self.__operators = tuple(operators)
-
-        super().__init__(op_matrix, **kwargs)
 
     @property
     def operators(self):
@@ -1192,6 +1283,5 @@ class DiagonalOperator(ProductSpaceOperator):
 
 
 if __name__ == '__main__':
-    # pylint: disable=wrong-import-position
     from odl.util.testutils import run_doctests
     run_doctests()
